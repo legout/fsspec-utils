@@ -19,7 +19,7 @@ from ..utils.polars import pl
 from ..utils.pyarrow import cast_schema, convert_large_types_to_normal
 from ..utils.pyarrow import opt_dtype as opt_dtype_pa
 from ..utils.pyarrow import unify_schemas as unify_schemas_pa
-from ..utils.types import dict_to_dataframe
+from ..utils.types import dict_to_dataframe, to_pyarrow_table
 
 if importlib.util.find_spec("pandas") is not None:
     import pandas as pd
