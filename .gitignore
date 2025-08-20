@@ -1,0 +1,5 @@
+.coverage
+dev/examples copy.ipynb
+**/__pycache__/
+documentation_report.md
+documentation_instructions.md

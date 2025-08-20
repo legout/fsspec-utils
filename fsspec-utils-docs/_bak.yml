@@ -1,0 +1,14 @@
+site_name: "fsspec-utils Documentation"
+theme:
+  name: material
+plugins:
+  - search
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - Architecture: architecture.md
+  - Examples: examples.md
+  - Advanced Usage: advanced.md
+  - API Reference: api/
+  - Contributing: contributing.md

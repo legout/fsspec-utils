@@ -1,0 +1,168 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fsspec-utils"
+dynamic = ["version"]
+description = "Enhanced utilities and extensions for fsspec filesystems with multi-format I/O support"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "FlowerPower Team" },
+]
+keywords = [
+    "fsspec",
+    "filesystem",
+    "cloud-storage",
+    "data-io",
+    "parquet",
+    "json",
+    "csv",
+    "s3",
+    "gcs",
+    "azure",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Filesystems",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fsspec>=2025.1.0",
+    "msgspec>=0.18.0",
+    "pyyaml>=6.0",
+    "requests>=2.25.0",
+    "loguru>=0.7.0",
+    "mkdocstrings[python]>=0.30.0",
+]
+
+[project.optional-dependencies]
+full = [
+    "orjson>=3.11.0",
+    "polars>=1.30.0", 
+    "pyarrow>=20.0.0",
+    "pandas>=2.2.0",
+    "pydala2>=0.9.9",
+    "joblib>=1.5.0",
+    "rich>=14.0.0",
+]
+aws = ["boto3>=1.26.0", "s3fs>=2025.1.0"]
+gcp = ["gcsfs>=2025.1.0"]
+azure = ["adlfs>=2024.12.0"]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/legout/fsspec-utils"
+Documentation = "https://fsspec-utils.readthedocs.io"
+Repository = "https://github.com/legout/fsspec-utils.git"
+Issues = "https://github.com/legout/fsspec-utils/issues"
+
+[tool.hatch.version]
+path = "src/fsspec_utils/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fsspec_utils"]
+
+# [tool.ruff]
+# line-length = 88
+# target-version = "py39"
+# select = [
+#     "E",  # pycodestyle errors
+#     "W",  # pycodestyle warnings
+#     "F",  # pyflakes
+#     "I",  # isort
+#     "C",  # flake8-comprehensions
+#     "B",  # flake8-bugbear
+# ]
+# ignore = [
+#     "E501",  # line too long, handled by black
+#     "B008",  # do not perform function calls in argument defaults
+#     "C901",  # too complex
+# ]
+
+# [tool.ruff.per-file-ignores]
+# "__init__.py" = ["F401"]
+# "tests/*" = ["E501"]
+
+# [tool.mypy]
+# python_version = "3.9"
+# check_untyped_defs = true
+# disallow_any_generics = true
+# disallow_incomplete_defs = true
+# disallow_untyped_defs = true
+# no_implicit_optional = true
+# warn_redundant_casts = true
+# warn_unused_ignores = true
+
+# [[tool.mypy.overrides]]
+# module = [
+#     "orjson.*",
+#     "polars.*",
+#     "pyarrow.*",
+#     "pydala.*",
+#     "joblib.*",
+#     "rich.*",
+# ]
+# ignore_missing_imports = true
+
+# [tool.pytest.ini_options]
+# testpaths = ["tests"]
+# python_files = ["test_*.py"]
+# python_classes = ["Test*"]
+# python_functions = ["test_*"]
+# addopts = [
+#     "--strict-markers",
+#     "--strict-config",
+#     "--cov=fsspec_utils",
+#     "--cov-report=term-missing",
+#     "--cov-fail-under=80",
+# ]
+
+# [tool.coverage.run]
+# source = ["src/fsspec_utils"]
+# omit = [
+#     "*/tests/*",
+#     "*/test_*",
+# ]
+
+# [tool.coverage.report]
+# exclude_lines = [
+#     "pragma: no cover",
+#     "def __repr__",
+#     "if self.debug:",
+#     "if settings.DEBUG",
+#     "raise AssertionError",
+#     "raise NotImplementedError",
+#     "if 0:",
+#     "if __name__ == .__main__.:",
+#     "class .*\\bProtocol\\):",
+#     "@(abc\\.)?abstractmethod",
+# ]
+
+[dependency-groups]
+dev = [
+    "deltalake>=1.1.4",
+    "ipykernel>=6.30.1",
+    "ipython>=9.4.0",
+    "isort>=6.0.1",
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.16",
+    "mkdocs-mermaid2-plugin>=1.2.1",
+    "ruff>=0.12.8",
+]
