@@ -5,7 +5,6 @@ import uuid
 from typing import Any, Generator
 
 import orjson
-
 # import polars as pl
 import pyarrow as pa
 import pyarrow.dataset as pds
@@ -13,10 +12,9 @@ import pyarrow.parquet as pq
 from fsspec import AbstractFileSystem
 from pydala.dataset import ParquetDataset
 
-from ..utils.misc import run_parallel
+from ..utils.misc import path_to_glob, run_parallel
 from ..utils.polars import opt_dtype as opt_dtype_pl
 from ..utils.polars import pl
-
 # from ..utils.polars import unify_schemas as unfify_schemas_pl
 from ..utils.pyarrow import cast_schema, convert_large_types_to_normal
 from ..utils.pyarrow import opt_dtype as opt_dtype_pa
@@ -29,54 +27,54 @@ else:
     raise ImportError("To use this module, please install `flowerpower[io]`.")
 
 
-def path_to_glob(path: str, format: str | None = None) -> str:
-    """Convert a path to a glob pattern for file matching.
+# def path_to_glob(path: str, format: str | None = None) -> str:
+#     """Convert a path to a glob pattern for file matching.
 
-    Intelligently converts paths to glob patterns that match files of the specified
-    format, handling various directory and wildcard patterns.
+#     Intelligently converts paths to glob patterns that match files of the specified
+#     format, handling various directory and wildcard patterns.
 
-    Args:
-        path: Base path to convert. Can include wildcards (* or **).
-            Examples: "data/", "data/*.json", "data/**"
-        format: File format to match (without dot). If None, inferred from path.
-            Examples: "json", "csv", "parquet"
+#     Args:
+#         path: Base path to convert. Can include wildcards (* or **).
+#             Examples: "data/", "data/*.json", "data/**"
+#         format: File format to match (without dot). If None, inferred from path.
+#             Examples: "json", "csv", "parquet"
 
-    Returns:
-        str: Glob pattern that matches files of specified format.
-            Examples: "data/**/*.json", "data/*.csv"
+#     Returns:
+#         str: Glob pattern that matches files of specified format.
+#             Examples: "data/**/*.json", "data/*.csv"
 
-    Example:
-        >>> # Basic directory
-        >>> path_to_glob("data", "json")
-        'data/**/*.json'
-        >>>
-        >>> # With wildcards
-        >>> path_to_glob("data/**", "csv")
-        'data/**/*.csv'
-        >>>
-        >>> # Format inference
-        >>> path_to_glob("data/file.parquet")
-        'data/file.parquet'
-    """
-    path = path.rstrip("/")
-    if format is None:
-        if ".json" in path:
-            format = "json"
-        elif ".csv" in path:
-            format = "csv"
-        elif ".parquet" in path:
-            format = "parquet"
+#     Example:
+#         >>> # Basic directory
+#         >>> path_to_glob("data", "json")
+#         'data/**/*.json'
+#         >>>
+#         >>> # With wildcards
+#         >>> path_to_glob("data/**", "csv")
+#         'data/**/*.csv'
+#         >>>
+#         >>> # Format inference
+#         >>> path_to_glob("data/file.parquet")
+#         'data/file.parquet'
+#     """
+#     path = path.rstrip("/")
+#     if format is None:
+#         if ".json" in path:
+#             format = "json"
+#         elif ".csv" in path:
+#             format = "csv"
+#         elif ".parquet" in path:
+#             format = "parquet"
 
-    if format in path:
-        return path
-    else:
-        if path.endswith("**"):
-            return posixpath.join(path, f"*.{format}")
-        elif path.endswith("*"):
-            if path.endswith("*/*"):
-                return path + f".{format}"
-            return posixpath.join(path.rstrip("/*"), f"*.{format}")
-        return posixpath.join(path, f"**/*.{format}")
+#     if format in path:
+#         return path
+#     else:
+#         if path.endswith("**"):
+#             return posixpath.join(path, f"*.{format}")
+#         elif path.endswith("*"):
+#             if path.endswith("*/*"):
+#                 return path + f".{format}"
+#             return posixpath.join(path.rstrip("/*"), f"*.{format}")
+#         return posixpath.join(path, f"**/*.{format}")
 
 
 def _read_json_file(

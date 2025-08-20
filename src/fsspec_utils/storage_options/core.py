@@ -15,7 +15,6 @@ from fsspec.utils import infer_storage_options
 
 from .base import BaseStorageOptions
 from .cloud import AwsStorageOptions, AzureStorageOptions, GcsStorageOptions
-
 # Import Git storage options
 from .git import GitHubStorageOptions, GitLabStorageOptions
 

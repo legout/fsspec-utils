@@ -2,13 +2,11 @@
 
 import importlib
 import os
+import posixpath
 from typing import Any, Callable, Optional, Union
 
 from joblib import Parallel, delayed
 from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
-
-# Parallel processing utilities
-
 
 # from ..utils.logging import get_logger
 
@@ -200,52 +198,54 @@ def get_partitions_from_path(
         return []
 
 
-def path_to_glob(path: str, format: Optional[str] = None) -> str:
+def path_to_glob(path: str, format: str | None = None) -> str:
     """Convert a path to a glob pattern for file matching.
 
     Intelligently converts paths to glob patterns that match files of the specified
     format, handling various directory and wildcard patterns.
 
     Args:
-        path: File or directory path to convert
-        format: File format/extension to match (e.g., "parquet", "csv", "json")
+        path: Base path to convert. Can include wildcards (* or **).
+            Examples: "data/", "data/*.json", "data/**"
+        format: File format to match (without dot). If None, inferred from path.
+            Examples: "json", "csv", "parquet"
 
     Returns:
-        str: Glob pattern for matching files
+        str: Glob pattern that matches files of specified format.
+            Examples: "data/**/*.json", "data/*.csv"
 
     Example:
-        >>> # Directory to parquet files glob
-        >>> path_to_glob("data/", "parquet")
-        'data/*.parquet'
+        >>> # Basic directory
+        >>> path_to_glob("data", "json")
+        'data/**/*.json'
         >>>
-        >>> # Already a glob pattern
-        >>> path_to_glob("data/*.csv")
-        'data/*.csv'
+        >>> # With wildcards
+        >>> path_to_glob("data/**", "csv")
+        'data/**/*.csv'
         >>>
-        >>> # Specific file
-        >>> path_to_glob("data/file.json")
-        'data/file.json'
+        >>> # Format inference
+        >>> path_to_glob("data/file.parquet")
+        'data/file.parquet'
     """
-    # If already a glob pattern, return as-is
-    if "*" in path or "?" in path or "[" in path:
+    path = path.rstrip("/")
+    if format is None:
+        if ".json" in path:
+            format = "json"
+        elif ".csv" in path:
+            format = "csv"
+        elif ".parquet" in path:
+            format = "parquet"
+
+    if format in path:
         return path
-
-    # If it's a directory (ends with /), add glob pattern
-    if path.endswith("/"):
-        if format:
-            return f"{path}*.{format}"
-        else:
-            return f"{path}*"
-
-    # If it has an extension, return as-is
-    if "." in path.split("/")[-1]:
-        return path
-
-    # Otherwise, treat as directory and add glob
-    if format:
-        return f"{path}/*.{format}"
     else:
-        return f"{path}/*"
+        if path.endswith("**"):
+            return posixpath.join(path, f"*.{format}")
+        elif path.endswith("*"):
+            if path.endswith("*/*"):
+                return path + f".{format}"
+            return posixpath.join(path.rstrip("/*"), f"*.{format}")
+        return posixpath.join(path, f"**/*.{format}")
 
 
 def check_optional_dependency(package_name: str, feature_name: str) -> None:
