@@ -1,7 +1,7 @@
 site_name: fsspec-utils
 site_description: Enhanced utilities and extensions for fsspec filesystems.
 site_url: https://legout.github.com/fsspec-utils
-repo_name: fsspec-utils
+repo_name: legout/fsspec-utils
 repo_url: https://github.com/legout/fsspec-utils
 pypi_url: https://pypi.org/project/fsspec-utils/
 

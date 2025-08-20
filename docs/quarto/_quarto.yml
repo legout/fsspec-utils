@@ -53,7 +53,7 @@ website:
     right:
       #- aria-label: "Search"
       #  search: true
-      - text: "GitHub"
+      - text: "legout/fsspec-utils"
         icon: "github"
         href: https://github.com/legout/fsspec-utils
       - text: "PyPI"
