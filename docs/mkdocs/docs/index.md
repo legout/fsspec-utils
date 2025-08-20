@@ -20,5 +20,5 @@ Ready to dive in? Check out our [Quickstart Guide](quickstart.md) to begin using
 
 ## Badges
 
-[![GitHub](https://img.shields.io/badge/GitHub-fsspec--utils-blue?logo=github)](https://github.com/fsspec/fsspec-utils)
+[![GitHub](https://img.shields.io/badge/GitHub-fsspec--utils-blue?logo=github)](https://github.com/legout/fsspec-utils)
 [![PyPI](https://img.shields.io/badge/PyPI-fsspec--utils-blue?logo=pypi)](https://pypi.org/project/fsspec-utils)
