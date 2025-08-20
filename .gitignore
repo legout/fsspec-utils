@@ -1,5 +1,6 @@
 .coverage
-dev/examples copy.ipynb
+dev/
 **/__pycache__/
 documentation_report.md
 documentation_instructions.md
+docs/site/
