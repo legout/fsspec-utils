@@ -426,6 +426,7 @@ class GitLabFileSystem(AbstractFileSystem):
         except FileNotFoundError:
             raise FileNotFoundError(f"File not found: {path}")
 
+
 fsspec.register_implementation("gitlab", GitLabFileSystem)
 
 # Original ls Methode speichern
@@ -445,6 +446,7 @@ def mscf_ls_p(self, path, detail=False, **kwargs):
 # patchen
 DirFileSystem.ls = dir_ls_p
 MonitoredSimpleCacheFileSystem.ls = mscf_ls_p
+
 
 def filesystem(
     protocol_or_path: str,
