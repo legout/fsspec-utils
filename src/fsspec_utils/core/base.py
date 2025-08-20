@@ -510,7 +510,7 @@ def filesystem(
     if "." in base_path:
         base_path = posixpath.dirname(base_path)
 
-    print(f"Base path: {base_path}, Protocol: {protocol}")
+    #print(f"Base path: {base_path}, Protocol: {protocol}")
 
     if base_fs is not None:
         if dirfs:

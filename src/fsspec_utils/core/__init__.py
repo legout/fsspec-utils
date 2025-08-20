@@ -1,7 +1,7 @@
 """Core filesystem functionality for fsspec-utils."""
 
 from .base import (GitLabFileSystem, MonitoredSimpleCacheFileSystem,
-                   filesystem, get_filesystem)
+                   filesystem, get_filesystem, DirFileSystem)
 
 # Conditional imports for extended functionality
 try:
@@ -12,6 +12,7 @@ except ImportError:
 __all__ = [
     "GitLabFileSystem",
     "MonitoredSimpleCacheFileSystem",
+    "DirFileSystem",
     "AbstractFileSystem",
     "filesystem",
     "get_filesystem",
