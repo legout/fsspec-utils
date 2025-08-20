@@ -495,7 +495,7 @@ def filesystem(
     if not protocol_or_path:
         # protocol_or_path = "file://"
         base_path = ""
-        protocol = None
+        protocol = "file"
 
     elif "://" in protocol_or_path:
         base_path = protocol_or_path.split("://")[-1]
@@ -504,7 +504,7 @@ def filesystem(
         base_path = protocol_or_path
         protocol = "file"
     else:
-        protocol = protocol_or_path
+        protocol = protocol_or_path if protocol_or_path is not None else "file"
         base_path = ""
 
     if "." in base_path:
