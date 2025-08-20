@@ -7,8 +7,8 @@ including:
 - Enhanced caching and monitoring
 - Batch processing and parallel operations
 """
-
-__version__ = "0.1.0"
+import importlib.metadata
+__version__ = importlib.metadata.version("fsspec-utils")
 
 # Always import from fsspec for now
 from fsspec import AbstractFileSystem
