@@ -9,7 +9,7 @@ description = "Enhanced utilities and extensions for fsspec filesystems with mul
 readme = "README.md"
 license = "MIT"
 authors = [
-    { name = "FlowerPower Team" },
+    { name = "legout", email = "ligno.blades@gmail.com" }
 ]
 keywords = [
     "fsspec",
