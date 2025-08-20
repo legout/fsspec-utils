@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fsspec-utils"
-version = "0.1.7"
+version = "0.1.8"
 description = "Enhanced utilities and extensions for fsspec filesystems with multi-format I/O support"
 readme = "README.md"
 license = "MIT"
@@ -70,7 +70,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/legout/fsspec-utils"
-Documentation = "https://fsspec-utils.readthedocs.io"
+Documentation = "https://legout.github.io/fsspec-utils"
 Repository = "https://github.com/legout/fsspec-utils.git"
 Issues = "https://github.com/legout/fsspec-utils/issues"
 
@@ -165,5 +165,6 @@ dev = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.6.16",
     "mkdocs-mermaid2-plugin>=1.2.1",
+    "quarto>=0.1.0",
     "ruff>=0.12.8",
 ]
