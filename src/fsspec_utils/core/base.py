@@ -19,6 +19,7 @@ from fsspec.implementations.memory import MemoryFile
 from ..storage_options.base import BaseStorageOptions
 from ..storage_options.core import from_dict as storage_options_from_dict
 from ..utils.logging import get_logger
+
 # from fsspec.utils import infer_storage_options
 from .ext import AbstractFileSystem
 

@@ -13,16 +13,23 @@ import importlib.metadata
 __version__ = importlib.metadata.version("fsspec-utils")
 
 
-from .core import AbstractFileSystem, filesystem, get_filesystem
-from .storage_options import (AwsStorageOptions, AzureStorageOptions,
-                              BaseStorageOptions, GcsStorageOptions,
-                              GitHubStorageOptions, GitLabStorageOptions,
-                              LocalStorageOptions, StorageOptions)
+from .core import AbstractFileSystem, DirFileSystem, filesystem, get_filesystem
+from .storage_options import (
+    AwsStorageOptions,
+    AzureStorageOptions,
+    BaseStorageOptions,
+    GcsStorageOptions,
+    GitHubStorageOptions,
+    GitLabStorageOptions,
+    LocalStorageOptions,
+    StorageOptions,
+)
 
 __all__ = [
     "filesystem",
     "get_filesystem",
     "AbstractFileSystem",
+    "DirFileSystem",
     "AwsStorageOptions",
     "AzureStorageOptions",
     "BaseStorageOptions",
