@@ -1212,24 +1212,12 @@
 <p>Provides access to files in GitHub repositories with support for: - Public and private repositories - Branch/tag/commit selection - Token-based authentication - Custom GitHub Enterprise instances</p>
 <p><strong>Attributes:</strong></p>
 <ul>
-<li>
-<p><code>protocol</code> (<code>str</code>): Always "github" for GitHub storage</p>
-</li>
-<li>
-<p><code>org</code> (<code>str</code>): Organization or user name</p>
-</li>
-<li>
-<p><code>repo</code> (<code>str</code>): Repository name</p>
-</li>
-<li>
-<p><code>ref</code> (<code>str</code>): Git reference (branch, tag, or commit SHA)</p>
-</li>
-<li>
-<p><code>token</code> (<code>str</code>): GitHub personal access token</p>
-</li>
-<li>
-<p><code>api_url</code> (<code>str</code>): Custom GitHub API URL for enterprise instances</p>
-</li>
+<li><code>protocol</code> (<code>str</code>): Always "github" for GitHub storage</li>
+<li><code>org</code> (<code>str</code>): Organization or user name</li>
+<li><code>repo</code> (<code>str</code>): Repository name</li>
+<li><code>ref</code> (<code>str</code>): Git reference (branch, tag, or commit SHA</li>
+<li><code>token</code> (<code>str</code>): GitHub personal access token</li>
+<li><code>api_url</code> (<code>str</code>): Custom GitHub API URL for enterprise instances</li>
 </ul>
 <p><strong>Example:</strong>
 <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1"> 1</a></span>
@@ -1334,27 +1322,13 @@
 <p>Provides access to files in GitLab repositories with support for: - Public and private repositories - Self-hosted GitLab instances - Project ID or name-based access - Branch/tag/commit selection - Token-based authentication</p>
 <p><strong>Attributes:</strong></p>
 <ul>
-<li>
-<p><code>protocol</code> (<code>str</code>): Always "gitlab" for GitLab storage</p>
-</li>
-<li>
-<p><code>base_url</code> (<code>str</code>): GitLab instance URL, defaults to gitlab.com</p>
-</li>
-<li>
-<p><code>project_id</code> (<code>str</code> | <code>int</code>): Project ID number</p>
-</li>
-<li>
-<p><code>project_name</code> (<code>str</code>): Project name/path</p>
-</li>
-<li>
-<p><code>ref</code> (<code>str</code>): Git reference (branch, tag, or commit SHA)</p>
-</li>
-<li>
-<p><code>token</code> (<code>str</code>): GitLab personal access token</p>
-</li>
-<li>
-<p><code>api_version</code> (<code>str</code>): API version to use</p>
-</li>
+<li><code>protocol</code> (<code>str</code>): Always "gitlab" for GitLab storage</li>
+<li><code>base_url</code> (<code>str</code>): GitLab instance URL, defaults to gitlab.com</li>
+<li><code>project_id</code> (<code>str</code> | <code>int</code>): Project ID number</li>
+<li><code>project_name</code> (<code>str</code>): Project name/path</li>
+<li><code>ref</code> (<code>str</code>): Git reference (branch, tag, or commit SHA)</li>
+<li><code>token</code> (<code>str</code>): GitLab personal access token</li>
+<li><code>api_version</code> (<code>str</code>): API version to use</li>
 </ul>
 <p><strong>Example:</strong>
 <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-4-1"> 1</a></span>
@@ -1432,13 +1406,18 @@
 <li><code>dict</code>: Arguments suitable for GitLabFileSystem</li>
 </ul>
 <p><strong>Example:</strong>
-```python
-options = GitLabStorageOptions(
-    project_id=12345,
-    token="glpat_xxxx"
-)
-kwargs = options.to_fsspec_kwargs()
-fs = filesystem("gitlab", **kwargs)</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-7-1">1</a></span>
+<span class="normal"><a href="#__codelineno-7-2">2</a></span>
+<span class="normal"><a href="#__codelineno-7-3">3</a></span>
+<span class="normal"><a href="#__codelineno-7-4">4</a></span>
+<span class="normal"><a href="#__codelineno-7-5">5</a></span>
+<span class="normal"><a href="#__codelineno-7-6">6</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1"></a><span class="n">options</span> <span class="o">=</span> <span class="n">GitLabStorageOptions</span><span class="p">(</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2"></a>    <span class="n">project_id</span><span class="o">=</span><span class="mi">12345</span><span class="p">,</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3"></a>    <span class="n">token</span><span class="o">=</span><span class="s2">&quot;glpat_xxxx&quot;</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4"></a><span class="p">)</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5"></a><span class="n">kwargs</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">to_fsspec_kwargs</span><span class="p">()</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6"></a><span class="n">fs</span> <span class="o">=</span> <span class="n">filesystem</span><span class="p">(</span><span class="s2">&quot;gitlab&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div></p>
 
 
 

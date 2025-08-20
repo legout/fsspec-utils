@@ -1948,10 +1948,12 @@
 <li><code>BaseStorageOptions</code>: Updated instance</li>
 </ul>
 <p><strong>Example:</strong>
-```python
-options = BaseStorageOptions(protocol="s3")
-options = options.update(region="us-east-1")
-print(options.region)</p>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-19-1">1</a></span>
+<span class="normal"><a href="#__codelineno-19-2">2</a></span>
+<span class="normal"><a href="#__codelineno-19-3">3</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1"></a><span class="n">options</span> <span class="o">=</span> <span class="n">BaseStorageOptions</span><span class="p">(</span><span class="n">protocol</span><span class="o">=</span><span class="s2">&quot;s3&quot;</span><span class="p">)</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2"></a><span class="n">options</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">region</span><span class="o">=</span><span class="s2">&quot;us-east-1&quot;</span><span class="p">)</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3"></a><span class="nb">print</span><span class="p">(</span><span class="n">options</span><span class="o">.</span><span class="n">region</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div></p>
 
 
 
