@@ -1603,7 +1603,7 @@ def write_parquet(
         ...     schema=schema
         ... )
     """
-    data = to_pyarrow_table(data, concat=False, unique=False)
+    data = to_pyarrow_table(data, concat=True, unique=False)
 
     if schema is not None:
         data = cast_schema(data, schema)
