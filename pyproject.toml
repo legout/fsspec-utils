@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fsspec-utils"
-version = "0.1.0"
+version = "0.1.1"
 description = "Enhanced utilities and extensions for fsspec filesystems with multi-format I/O support"
 readme = "README.md"
 license = "MIT"
@@ -42,7 +42,7 @@ dependencies = [
     "pyyaml>=6.0",
     "requests>=2.25.0",
     "loguru>=0.7.0",
-    "mkdocstrings[python]>=0.30.0",
+    
 ]
 
 [project.optional-dependencies]
@@ -65,6 +65,8 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
+    "mkdocs",
+    "mkdocstrings[python]>=0.30.0",
 ]
 
 [project.urls]
