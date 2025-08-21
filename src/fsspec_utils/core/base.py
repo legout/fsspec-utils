@@ -492,6 +492,8 @@ def filesystem(
         ...     "token": "glpat_xxxx"
         ... })
     """
+    if isinstance(protocol_or_path, Path):
+        protocol_or_path = protocol_or_path.as_posix()
     if not protocol_or_path:
         # protocol_or_path = "file://"
         base_path = ""
