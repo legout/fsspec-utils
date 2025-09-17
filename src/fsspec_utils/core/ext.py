@@ -10,7 +10,7 @@ import pyarrow as pa
 import pyarrow.dataset as pds
 import pyarrow.parquet as pq
 from fsspec import AbstractFileSystem
-from pydala.dataset import ParquetDataset
+#from pydala.dataset import ParquetDataset
 
 from ..utils.misc import path_to_glob, run_parallel
 from ..utils.polars import opt_dtype as opt_dtype_pl
@@ -1492,57 +1492,57 @@ def pyarrow_parquet_dataset(
     )
 
 
-def pydala_dataset(
-    self: AbstractFileSystem,
-    path: str,
-    partitioning: str | list[str] | pds.Partitioning = None,
-    **kwargs: Any,
-) -> ParquetDataset:  # type: ignore
-    """Create a Pydala dataset for advanced Parquet operations.
+# def pydala_dataset(
+#     self: AbstractFileSystem,
+#     path: str,
+#     partitioning: str | list[str] | pds.Partitioning = None,
+#     **kwargs: Any,
+# ) -> ParquetDataset:  # type: ignore
+#     """Create a Pydala dataset for advanced Parquet operations.
 
-    Creates a dataset with additional features beyond PyArrow including:
-    - Delta table support
-    - Schema evolution
-    - Advanced partitioning
-    - Metadata management
-    - Sort key optimization
+#     Creates a dataset with additional features beyond PyArrow including:
+#     - Delta table support
+#     - Schema evolution
+#     - Advanced partitioning
+#     - Metadata management
+#     - Sort key optimization
 
-    Args:
-        path: Path to dataset directory
-        partitioning: How the dataset is partitioned. Can be:
-            - str: Single partition field
-            - list[str]: Multiple partition fields
-            - pds.Partitioning: Custom partitioning scheme
-        **kwargs: Additional dataset configuration
+#     Args:
+#         path: Path to dataset directory
+#         partitioning: How the dataset is partitioned. Can be:
+#             - str: Single partition field
+#             - list[str]: Multiple partition fields
+#             - pds.Partitioning: Custom partitioning scheme
+#         **kwargs: Additional dataset configuration
 
-    Returns:
-        ParquetDataset: Pydala dataset instance
+#     Returns:
+#         ParquetDataset: Pydala dataset instance
 
-    Example:
-        >>> fs = LocalFileSystem()
-        >>> # Create dataset
-        >>> ds = fs.pydala_dataset(
-        ...     "data/",
-        ...     partitioning=["date"]
-        ... )
-        >>>
-        >>> # Write with delta support
-        >>> ds.write_to_dataset(
-        ...     new_data,
-        ...     mode="delta",
-        ...     delta_subset=["id"]
-        ... )
-        >>>
-        >>> # Read with metadata
-        >>> df = ds.to_polars()
-        >>> print(df.columns)
-    """
-    return ParquetDataset(
-        path,
-        filesystem=self,
-        partitioning=partitioning,
-        **kwargs,
-    )
+#     Example:
+#         >>> fs = LocalFileSystem()
+#         >>> # Create dataset
+#         >>> ds = fs.pydala_dataset(
+#         ...     "data/",
+#         ...     partitioning=["date"]
+#         ... )
+#         >>>
+#         >>> # Write with delta support
+#         >>> ds.write_to_dataset(
+#         ...     new_data,
+#         ...     mode="delta",
+#         ...     delta_subset=["id"]
+#         ... )
+#         >>>
+#         >>> # Read with metadata
+#         >>> df = ds.to_polars()
+#         >>> print(df.columns)
+#     """
+#     return ParquetDataset(
+#         path,
+#         filesystem=self,
+#         partitioning=partitioning,
+#         **kwargs,
+#     )
 
 
 def write_parquet(
@@ -2036,90 +2036,90 @@ def write_pyarrow_dataset(
         return metadata
 
 
-def write_pydala_dataset(
-    self,
-    data: (
-        pl.DataFrame
-        | pl.LazyFrame
-        | pa.Table
-        | pa.RecordBatch
-        | pa.RecordBatchReader
-        | pd.DataFrame
-        | dict
-        | list[
-            pl.DataFrame
-            | pl.LazyFrame
-            | pa.Table
-            | pa.RecordBatch
-            | pa.RecordBatchReader
-            | pd.DataFrame
-            | dict
-        ]
-    ),
-    path: str,
-    mode: str = "append",  # "delta", "overwrite"
-    basename: str | None = None,
-    partition_by: str | list[str] | None = None,
-    partitioning_flavor: str = "hive",
-    max_rows_per_file: int | None = 2_500_000,
-    row_group_size: int | None = 250_000,
-    compression: str = "zstd",
-    concat: bool = True,
-    sort_by: str | list[str] | list[tuple[str, str]] | None = None,
-    unique: bool | str | list[str] = False,
-    delta_subset: str | list[str] | None = None,
-    update_metadata: bool = True,
-    alter_schema: bool = False,
-    timestamp_column: str | None = None,
-    verbose: bool = False,
-    **kwargs,
-) -> None:
-    """Write a tabular data to a Pydala dataset.
+# def write_pydala_dataset(
+#     self,
+#     data: (
+#         pl.DataFrame
+#         | pl.LazyFrame
+#         | pa.Table
+#         | pa.RecordBatch
+#         | pa.RecordBatchReader
+#         | pd.DataFrame
+#         | dict
+#         | list[
+#             pl.DataFrame
+#             | pl.LazyFrame
+#             | pa.Table
+#             | pa.RecordBatch
+#             | pa.RecordBatchReader
+#             | pd.DataFrame
+#             | dict
+#         ]
+#     ),
+#     path: str,
+#     mode: str = "append",  # "delta", "overwrite"
+#     basename: str | None = None,
+#     partition_by: str | list[str] | None = None,
+#     partitioning_flavor: str = "hive",
+#     max_rows_per_file: int | None = 2_500_000,
+#     row_group_size: int | None = 250_000,
+#     compression: str = "zstd",
+#     concat: bool = True,
+#     sort_by: str | list[str] | list[tuple[str, str]] | None = None,
+#     unique: bool | str | list[str] = False,
+#     delta_subset: str | list[str] | None = None,
+#     update_metadata: bool = True,
+#     alter_schema: bool = False,
+#     timestamp_column: str | None = None,
+#     verbose: bool = False,
+#     **kwargs,
+# ) -> None:
+#     """Write a tabular data to a Pydala dataset.
 
-    Args:
-        data: (pl.DataFrame | pa.Table | pa.RecordBatch | pa.RecordBatchReader |
-            pd.DataFrame | list[pl.DataFrame] | list[pa.Table] | list[pa.RecordBatch] |
-            list[pa.RecordBatchReader] | list[pd.DataFrame]) Data to write.
-        path: (str) Path to write the data.
-        mode: (str, optional) Write mode. Defaults to 'append'. Options: 'delta', 'overwrite'.
-        basename: (str, optional) Basename of the files. Defaults to None.
-        partition_by: (str | list[str], optional) Partitioning of the data. Defaults to None.
-        partitioning_flavor: (str, optional) Partitioning flavor. Defaults to 'hive'.
-        max_rows_per_file: (int, optional) Maximum number of rows per file. Defaults to 2_500_000.
-        row_group_size: (int, optional) Row group size. Defaults to 250_000.
-        compression: (str, optional) Compression algorithm. Defaults to 'zstd'.
-        sort_by: (str | list[str] | list[tuple[str, str]], optional) Columns to sort by. Defaults to None.
-        unique: (bool | str | list[str], optional) If True, ensure unique values. Defaults to False.
-        delta_subset: (str | list[str], optional) Subset of columns to include in delta table. Defaults to None.
-        update_metadata: (bool, optional) If True, update metadata. Defaults to True.
-        alter_schema: (bool, optional) If True, alter schema. Defaults to False.
-        timestamp_column: (str, optional) Timestamp column. Defaults to None.
-        verbose: (bool, optional) If True, print verbose output. Defaults to False.
-        **kwargs: Additional keyword arguments for `ParquetDataset.write_to_dataset`.
+#     Args:
+#         data: (pl.DataFrame | pa.Table | pa.RecordBatch | pa.RecordBatchReader |
+#             pd.DataFrame | list[pl.DataFrame] | list[pa.Table] | list[pa.RecordBatch] |
+#             list[pa.RecordBatchReader] | list[pd.DataFrame]) Data to write.
+#         path: (str) Path to write the data.
+#         mode: (str, optional) Write mode. Defaults to 'append'. Options: 'delta', 'overwrite'.
+#         basename: (str, optional) Basename of the files. Defaults to None.
+#         partition_by: (str | list[str], optional) Partitioning of the data. Defaults to None.
+#         partitioning_flavor: (str, optional) Partitioning flavor. Defaults to 'hive'.
+#         max_rows_per_file: (int, optional) Maximum number of rows per file. Defaults to 2_500_000.
+#         row_group_size: (int, optional) Row group size. Defaults to 250_000.
+#         compression: (str, optional) Compression algorithm. Defaults to 'zstd'.
+#         sort_by: (str | list[str] | list[tuple[str, str]], optional) Columns to sort by. Defaults to None.
+#         unique: (bool | str | list[str], optional) If True, ensure unique values. Defaults to False.
+#         delta_subset: (str | list[str], optional) Subset of columns to include in delta table. Defaults to None.
+#         update_metadata: (bool, optional) If True, update metadata. Defaults to True.
+#         alter_schema: (bool, optional) If True, alter schema. Defaults to False.
+#         timestamp_column: (str, optional) Timestamp column. Defaults to None.
+#         verbose: (bool, optional) If True, print verbose output. Defaults to False.
+#         **kwargs: Additional keyword arguments for `ParquetDataset.write_to_dataset`.
 
-    Returns:
-        None
-    """
-    data = to_pyarrow_table(data, concat=concat, unique=unique)
+#     Returns:
+#         None
+#     """
+#     data = to_pyarrow_table(data, concat=concat, unique=unique)
 
-    ds = pydala_dataset(self=self, path=path, partitioning=partitioning_flavor)
-    ds.write_to_dataset(
-        data=data,
-        mode=mode,
-        basename=basename,
-        partition_by=partition_by,
-        max_rows_per_file=max_rows_per_file,
-        row_group_size=row_group_size,
-        compression=compression,
-        sort_by=sort_by,
-        unique=unique,
-        delta_subset=delta_subset,
-        update_metadata=update_metadata,
-        alter_schema=alter_schema,
-        timestamp_column=timestamp_column,
-        verbose=verbose,
-        **kwargs,
-    )
+#     ds = pydala_dataset(self=self, path=path, partitioning=partitioning_flavor)
+#     ds.write_to_dataset(
+#         data=data,
+#         mode=mode,
+#         basename=basename,
+#         partition_by=partition_by,
+#         max_rows_per_file=max_rows_per_file,
+#         row_group_size=row_group_size,
+#         compression=compression,
+#         sort_by=sort_by,
+#         unique=unique,
+#         delta_subset=delta_subset,
+#         update_metadata=update_metadata,
+#         alter_schema=alter_schema,
+#         timestamp_column=timestamp_column,
+#         verbose=verbose,
+#         **kwargs,
+#     )
 
 
 AbstractFileSystem.read_json_file = read_json_file
@@ -2130,7 +2130,7 @@ AbstractFileSystem.read_parquet_file = read_parquet_file
 AbstractFileSystem.read_parquet = read_parquet
 AbstractFileSystem.read_files = read_files
 AbstractFileSystem.pyarrow_dataset = pyarrow_dataset
-AbstractFileSystem.pydala_dataset = pydala_dataset
+#AbstractFileSystem.pydala_dataset = pydala_dataset
 AbstractFileSystem.pyarrow_parquet_dataset = pyarrow_parquet_dataset
 AbstractFileSystem.write_parquet = write_parquet
 AbstractFileSystem.write_json = write_json
@@ -2138,4 +2138,4 @@ AbstractFileSystem.write_csv = write_csv
 AbstractFileSystem.write_file = write_file
 AbstractFileSystem.write_files = write_files
 AbstractFileSystem.write_pyarrow_dataset = write_pyarrow_dataset
-AbstractFileSystem.write_pydala_dataset = write_pydala_dataset
+#AbstractFileSystem.write_pydala_dataset = write_pydala_dataset

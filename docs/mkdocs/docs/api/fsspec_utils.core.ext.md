@@ -1,6 +1,6 @@
 # `fsspec_utils.core.ext` API Documentation
 
-This module provides extended functionalities for `fsspec.AbstractFileSystem`, including methods for reading and writing various file formats (JSON, CSV, Parquet) with advanced options like batch processing, parallelization, and data type optimization. It also includes functions for creating PyArrow and Pydala datasets.
+This module provides extended functionalities for `fsspec.AbstractFileSystem`, including methods for reading and writing various file formats (JSON, CSV, Parquet) with advanced options like batch processing, parallelization, and data type optimization. It also includes functions for creating PyArrow datasets.
 
 ---
 
@@ -475,7 +475,7 @@ This function is particularly useful for:
 - Datasets with existing `_metadata` files
 - Multi-file datasets that should be treated as one
 - Partitioned Parquet datasets
-  
+
 | Parameter | Type | Description |
 | :-------- | :--- | :---------- |
 | `path` | `str` | Path to dataset directory or `_metadata` file |
@@ -511,7 +511,7 @@ table = ds.to_table(
 )
 ```
 
----
+<!-----
 
 ## `pydala_dataset()`
 
@@ -557,7 +557,7 @@ ds.write_to_dataset(
 # Read with metadata
 df = ds.to_polars()
 print(df.columns)
-```
+```-->
 
 ---
 
@@ -791,7 +791,7 @@ Write a tabular data to a PyArrow dataset.
 | :------ | :--- | :---------- |
 | `list[pq.FileMetaData]` or `None` | List of Parquet file metadata or None. |
 
----
+<!-----
 
 ## `write_pydala_dataset()`
 
@@ -819,4 +819,4 @@ Write a tabular data to a Pydala dataset.
 
 | Returns | Type | Description |
 | :------ | :--- | :---------- |
-| `None` | `None` | |
+| `None` | `None` | |-->

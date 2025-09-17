@@ -385,11 +385,10 @@ This example illustrates how to read Parquet, CSV, and JSON files in batches usi
 
 ### Advanced Parquet Handling and Delta Lake Integration
 
-`fsspec-utils` enhances Parquet operations with deep integration with PyArrow and Pydala, enabling efficient dataset management, partitioning, and delta lake capabilities.
+`fsspec-utils` enhances Parquet operations with deep integration with PyArrow, enabling efficient dataset management, partitioning, and delta lake capabilities.
 
 -   **`pyarrow_dataset`**: Create PyArrow datasets for optimized querying, partitioning, and predicate pushdown.
 -   **`pyarrow_parquet_dataset`**: Specialized for Parquet, handling `_metadata` files for overall dataset schemas.
--   **`pydala_dataset`**: Integrates with `pydala` for advanced features like Delta Lake operations (upserts, schema evolution).
 
 **Example: Writing to a PyArrow Dataset with Partitioning**
 
@@ -422,7 +421,7 @@ print(f"Data written to {base_path} partitioned by year/month.")
 # Expected structure: output/my_partitioned_data/year=2023/month=10/data-*.parquet
 ```
 
-**Example: Delta Lake Operations with Pydala Dataset**
+<!--**Example: Delta Lake Operations with Pydala Dataset**
 
 ```python
 import polars as pl
@@ -467,7 +466,7 @@ updated_df = fs.pydala_dataset(delta_path).to_polars()
 print("Updated Delta table:")
 print(updated_df)
 # Expected: id=1 Alicia version=2, id=2 Bob version=1, id=3 Charlie version=1
-```
+```-->
 
 `fsspec-utils` facilitates integration with Delta Lake by providing `StorageOptions` that can be used to configure `deltalake`'s `DeltaTable` for various storage backends.
 
@@ -628,7 +627,7 @@ For a comprehensive collection of executable examples demonstrating various func
 -   **Parallel Reading**: For multiple files, set `use_threads=True` in `read_json`, `read_csv`, and `read_parquet` to leverage concurrent I/O.
 -   **Batch Processing**: When dealing with a very large number of files or extremely large individual files, use the `batch_size` parameter in reading functions to process data in chunks, reducing memory footprint.
 -   **`opt_dtypes`**: Utilize `opt_dtypes=True` in reading functions when converting to Polars or PyArrow to automatically optimize column data types, leading to more efficient memory usage and faster subsequent operations.
--   **Parquet Datasets**: For large, partitioned Parquet datasets, use `pyarrow_dataset` or `pydala_dataset`. These leverage PyArrow's dataset API for efficient metadata handling, partition pruning, and predicate pushdown, reading only the necessary data.
+-   **Parquet Datasets**: For large, partitioned Parquet datasets, use `pyarrow_dataset` or `pyarrow_parquet_dataset`. These leverage PyArrow's dataset API for efficient metadata handling, partition pruning, and predicate pushdown, reading only the necessary data.
 -   **Compression**: When writing Parquet files, choose an appropriate compression codec (e.g., `zstd`, `snappy`) to reduce file size and improve I/O performance. `zstd` often provides a good balance of compression ratio and speed.
 
 ## Flexible Storage Configuration
