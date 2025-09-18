@@ -40,11 +40,11 @@ def sql2pyarrow_filter(string: str, schema: pa.Schema) -> pc.Expression:
             return type(val)(parse_value(v, type_) for v in val)
 
         if pa.types.is_timestamp(type_):
-            return timestamp_from_string(val, exact=False, tz=type_.tz)
+            return timestamp_from_string(val,tz=type_.tz)
         elif pa.types.is_date(type_):
-            return timestamp_from_string(val, exact=True).date()
+            return timestamp_from_string(val).date()
         elif pa.types.is_time(type_):
-            return timestamp_from_string(val, exact=True).time()
+            return timestamp_from_string(val).time()
 
         elif pa.types.is_integer(type_):
             return int(float(val.strip("'").replace(",", ".")))
