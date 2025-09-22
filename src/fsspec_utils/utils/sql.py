@@ -39,6 +39,9 @@ def sql2pyarrow_filter(string: str, schema: pa.Schema) -> pc.Expression:
         if isinstance(val, (tuple, list)):
             return type(val)(parse_value(v, type_) for v in val)
 
+        # Remove quotes from the value if present
+        val = val.strip().strip("'\"")
+
         if pa.types.is_timestamp(type_):
             return timestamp_from_string(val,tz=type_.tz)
         elif pa.types.is_date(type_):
@@ -47,13 +50,13 @@ def sql2pyarrow_filter(string: str, schema: pa.Schema) -> pc.Expression:
             return timestamp_from_string(val).time()
 
         elif pa.types.is_integer(type_):
-            return int(float(val.strip("'").replace(",", ".")))
+            return int(float(val.replace(",", ".")))
         elif pa.types.is_floating(type_):
-            return float(val.strip("'").replace(",", "."))
+            return float(val.replace(",", "."))
         elif pa.types.is_boolean(type_):
-            return val.lower().strip("'") in ("true", "1", "yes")
+            return val.lower() in ("true", "1", "yes")
         else:
-            return val.strip("'")
+            return val
 
     def _parse_part(part: str) -> pc.Expression:
         match = SPLIT_PATTERN.search(part)
@@ -129,6 +132,9 @@ def sql2polars_filter(string: str, schema: pl.Schema) -> pl.Expr:
         if isinstance(val, (tuple, list)):
             return type(val)(parse_value(v, dtype) for v in val)
 
+        # Remove quotes from the value if present
+        val = val.strip().strip("'\"")
+
         if dtype == pl.Datetime:
             return timestamp_from_string(val, exact=False, tz=dtype.time_zone)
         elif dtype == pl.Date:
@@ -136,13 +142,13 @@ def sql2polars_filter(string: str, schema: pl.Schema) -> pl.Expr:
         elif dtype == pl.Time:
             return timestamp_from_string(val, exact=True).time()
         elif dtype in (pl.Int8, pl.Int16, pl.Int32, pl.Int64):
-            return int(float(val.strip("'").replace(",", ".")))
+            return int(float(val.replace(",", ".")))
         elif dtype in (pl.Float32, pl.Float64):
-            return float(val.strip("'").replace(",", "."))
+            return float(val.replace(",", "."))
         elif dtype == pl.Boolean:
-            return val.lower().strip("'") in ("true", "1", "yes")
+            return val.lower() in ("true", "1", "yes")
         else:
-            return val.strip("'")
+            return val
 
     def _parse_part(part: str) -> pl.Expr:
         match = SPLIT_PATTERN.search(part)
