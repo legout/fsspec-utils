@@ -4,6 +4,7 @@ import numpy as np
 import polars as pl
 import pyarrow as pa
 import pyarrow.compute as pc
+import re
 
 # Pre-compiled regex patterns (identical to original)
 INTEGER_REGEX = r"^[-+]?\d+$"
@@ -159,21 +160,15 @@ def unify_schemas(
         schemas = standardize_schema_timezones(schemas, timezone)
     try:
         return pa.unify_schemas(schemas, promote_options="permissive")
-    except (pa.lib.ArrowInvalid, pa.lib.ArrowTypeError) as e:
+    except (pa.ArrowInvalid, pa.ArrowTypeError) as e:
         _ = e.args[0]
         # If unify_schemas fails, we can try to create a schema with empty tables
-        schema = (
-            pl.concat(
-                [
-                    # pl.from_arrow(pa.Table.from_pylist([], schema=schema))
-                    pl.from_arrow(schema.empty_table())
-                    for schema in schemas
-                ],
-                how="diagonal_relaxed",
-            )
-            .to_arrow()
-            .schema
-        )
+        empty_tables = [pa.Table.from_arrays([], schema=schema) for schema in schemas]
+        try:
+            schema = pa.unify_schemas(empty_tables, promote_options="permissive")
+        except Exception:
+            # Fallback: nimm erste Schema
+            schema = schemas[0]
         if not use_large_dtypes:
             return convert_large_types_to_normal(schema)
         return schema
@@ -262,97 +257,66 @@ def convert_large_types_to_normal(schema: pa.Schema) -> pa.Schema:
     return pa.schema(new_fields)
 
 
-def _clean_string_array(array: pa.Array) -> pa.DataType:
-    """
-    Clean string values in a PyArrow array using vectorized operations.
-    Returns the optimal dtype after cleaning.
-    """
-    if len(array) == 0 or array.null_count == len(array):
-        return array.type
+NULL_LIKE_STRINGS = {
+    "",
+    "-",
+    "None",
+    "none",
+    "NONE",
+    "NaN",
+    "Nan",
+    "nan",
+    "NAN",
+    "N/A",
+    "n/a",
+    "Null",
+    "NULL",
+    "null",
+}
 
-    # Trim whitespace using compute functions
-    trimmed = pc.utf8_trim_whitespace(array)
 
-    # Create mask for values to convert to null
-    empty_mask = pc.equal(trimmed, "")
-    dash_mask = pc.equal(trimmed, "-")
-    none_mask = pc.or_(
-        pc.equal(trimmed, "None"),
-        pc.equal(trimmed, "none"),
-        pc.equal(trimmed, "NONE"),
-        pc.equal(trimmed, "Nan"),
-        pc.equal(trimmed, "N/A"),
-        pc.equal(trimmed, "n/a"),
-        pc.equal(trimmed, "NaN"),
-        pc.equal(trimmed, "nan"),
-        pc.equal(trimmed, "NAN"),
-        pc.equal(trimmed, "Null"),
-        pc.equal(trimmed, "NULL"),
-        pc.equal(trimmed, "null"),
-    )
-
-    null_mask = pc.or_(pc.or_(empty_mask, dash_mask), none_mask)
-
-    # If all values are null after cleaning, return null type
-    if pc.all(null_mask).as_py():
-        return pa.null()
-
-    return array.type  # Default: keep string type if not all null
+def _clean_string_array(array: pa.Array) -> pa.Array:
+    """Trimmt Strings und ersetzt definierte Platzhalter durch Null (Python-basiert, robust)."""
+    if len(array) == 0:
+        return array
+    # pc.utf8_trim_whitespace kann fehlen / unterschiedlich sein → fallback
+    py = [None if v is None else str(v).strip() for v in array.to_pylist()]
+    cleaned_list = [None if (v is None or v in NULL_LIKE_STRINGS) else v for v in py]
+    return pa.array(cleaned_list, type=pa.string())
 
 
 def _can_downcast_to_float32(array: pa.Array) -> bool:
-    """
-    Check if float values are within Float32 range using vectorized operations.
-    """
+    """Prüft Float32 Range (Python fallback)."""
     if len(array) == 0 or array.null_count == len(array):
         return True
-
-    is_finite = pc.is_finite(array)
-    if not pc.any(is_finite).as_py():
+    values = [v for v in array.to_pylist() if isinstance(v, (int, float)) and v not in (None, float("inf"), float("-inf"))]
+    if not values:
         return True
-
-    finite_array = pc.filter(array, is_finite)
-    min_val = pc.min(finite_array).as_py()
-    max_val = pc.max(finite_array).as_py()
-
-    return F32_MIN <= min_val <= max_val <= F32_MAX
+    mn, mx = min(values), max(values)
+    return F32_MIN <= mn <= mx <= F32_MAX
 
 
-def _get_optimal_int_type(
-    array: pa.Array, allow_unsigned: bool, allow_null: bool = True
-) -> pa.DataType:
-    """
-    Determine the most efficient integer type based on data range.
-    """
-    if len(array) == 0 or array.null_count == len(array):
-        if allow_null:
-            return pa.null()
-        else:
-            # If all values are null and allow_null is False, default to int8
-            return pa.int8()
-
-    min_max = pc.min_max(array)
-    min_val = min_max["min"].as_py()
-    max_val = min_max["max"].as_py()
-
+def _get_optimal_int_type(array: pa.Array, allow_unsigned: bool, allow_null: bool = True) -> pa.DataType:
+    values = [v for v in array.to_pylist() if v is not None]
+    if not values:
+        return pa.null() if allow_null else pa.int8()
+    min_val = min(values)
+    max_val = max(values)
     if allow_unsigned and min_val >= 0:
         if max_val <= 255:
             return pa.uint8()
-        elif max_val <= 65535:
+        if max_val <= 65535:
             return pa.uint16()
-        elif max_val <= 4294967295:
+        if max_val <= 4294967295:
             return pa.uint32()
-        else:
-            return pa.uint64()
-    else:
-        if -128 <= min_val and max_val <= 127:
-            return pa.int8()
-        elif -32768 <= min_val and max_val <= 32767:
-            return pa.int16()
-        elif -2147483648 <= min_val and max_val <= 2147483647:
-            return pa.int32()
-        else:
-            return pa.int64()
+        return pa.uint64()
+    if -128 <= min_val and max_val <= 127:
+        return pa.int8()
+    if -32768 <= min_val and max_val <= 32767:
+        return pa.int16()
+    if -2147483648 <= min_val and max_val <= 2147483647:
+        return pa.int32()
+    return pa.int64()
 
 
 def _optimize_numeric_array(
@@ -380,13 +344,22 @@ def _optimize_numeric_array(
     return array.type
 
 
+_REGEX_CACHE: dict[str, re.Pattern] = {}
+
+
 def _all_match_regex(array: pa.Array, pattern: str) -> bool:
-    """
-    Check if all non-null values in array match regex pattern.
-    """
+    """Python Regex Matching (alle nicht-null Werte)."""
     if len(array) == 0 or array.null_count == len(array):
         return False
-    return pc.all(pc.match_substring_regex(array, pattern, ignore_case=True)).as_py()
+    if pattern not in _REGEX_CACHE:
+        _REGEX_CACHE[pattern] = re.compile(pattern, re.IGNORECASE)
+    rgx = _REGEX_CACHE[pattern]
+    for v in array.to_pylist():
+        if v is None:
+            continue
+        if not rgx.match(str(v)):
+            return False
+    return True
 
 
 def _optimize_string_array(
@@ -396,80 +369,104 @@ def _optimize_string_array(
     time_zone: str | None = None,
     allow_unsigned: bool = True,
     allow_null: bool = True,
-) -> pa.DataType:
-    """
-    Convert string PyArrow array to appropriate type based on content analysis.
-    Returns the optimal dtype.
+) -> tuple[pa.Array, pa.DataType]:
+    """Analysiere String-Array und bestimme Ziel-Datentyp.
+
+    Rückgabe: (bereinigtes_array, ziel_datentyp)
+    Platzhalter-/Leerwerte blockieren keine Erkennung mehr.
     """
     if len(array) == 0 or array.null_count == len(array):
-        if allow_null:
-            return pa.null()
-        else:
-            return array.type
+        return array, (pa.null() if allow_null else array.type)
 
-    cleaned_array = _clean_string_array(
-        array, allow_null
-    )  # pc.utf8_trim_whitespace(array)
+    cleaned_array = _clean_string_array(array)
+
+    # Werte für Erkennung: nur nicht-null
+    non_null_list = [v for v in cleaned_array.to_pylist() if v is not None]
+    if not non_null_list:
+        return cleaned_array, (pa.null() if allow_null else array.type)
+    non_null = pa.array(non_null_list, type=pa.string())
 
     try:
-        if _all_match_regex(cleaned_array, BOOLEAN_REGEX):
-            return pa.bool_()
-        elif _all_match_regex(cleaned_array, INTEGER_REGEX):
-            int_array = pc.cast(
-                pc.replace_substring(cleaned_array, ",", "."), pa.int64()
-            )
-            return _optimize_numeric_array(
-                int_array, allow_unsigned=allow_unsigned, allow_null=allow_null
-            )
-        elif _all_match_regex(cleaned_array, FLOAT_REGEX):
-            float_array = pc.cast(
-                pc.replace_substring(cleaned_array, ",", "."), pa.float64()
-            )
-            return _optimize_numeric_array(
-                float_array,
-                shrink_numerics,
-                allow_unsigned=allow_unsigned,
-                allow_null=allow_null,
-            )
-        elif _all_match_regex(cleaned_array, DATETIME_REGEX):
+        # Boolean
+        if _all_match_regex(non_null, BOOLEAN_REGEX):
+            bool_values = [
+                True
+                if re.match(BOOLEAN_TRUE_REGEX, v, re.IGNORECASE)
+                else False
+                for v in non_null_list
+            ]
+            # Rekonstruiere vollständige Länge unter Erhalt der Nulls
+            it = iter(bool_values)
+            casted_full = [next(it) if v is not None else None for v in cleaned_array.to_pylist()]
+            return pa.array(casted_full, type=pa.bool_()), pa.bool_()
+
+        # Integer
+        if _all_match_regex(non_null, INTEGER_REGEX):
+            int_values = [int(v) for v in non_null_list]
+            optimized_type = _get_optimal_int_type(pa.array(int_values, type=pa.int64()), allow_unsigned, allow_null)
+            it = iter(int_values)
+            casted_full = [next(it) if v is not None else None for v in cleaned_array.to_pylist()]
+            return pa.array(casted_full, type=optimized_type), optimized_type
+
+        # Float
+        if _all_match_regex(non_null, FLOAT_REGEX):
+            float_values = [float(v.replace(',', '.')) for v in non_null_list]
+            base_arr = pa.array(float_values, type=pa.float64())
+            target_type = pa.float64()
+            if shrink_numerics and _can_downcast_to_float32(base_arr):
+                target_type = pa.float32()
+            it = iter(float_values)
+            casted_full = [next(it) if v is not None else None for v in cleaned_array.to_pylist()]
+            return pa.array(casted_full, type=target_type), target_type
+
+        # Datetime
+        if _all_match_regex(non_null, DATETIME_REGEX):
+            # Nutzung Polars für tolerant parsing
             pl_series = pl.Series(col_name, cleaned_array)
             converted = pl_series.str.to_datetime(
                 strict=False, time_unit="us", time_zone=time_zone
             )
-            # Get the Arrow dtype from Polars
-            arrow_dtype = converted.to_arrow().type
-            return arrow_dtype
-    except Exception:
-        return pa.string()
+            return converted.to_arrow(), converted.to_arrow().type
+    except Exception:  # pragma: no cover
+        pass
 
-    return pa.string()
+    # Kein Cast
+    return cleaned_array, pa.string()
 
 
 def _process_column(
-    # table: pa.Table,
-    # col_name: str,
     array: pa.Array,
     col_name: str,
     shrink_numerics: bool,
     allow_unsigned: bool,
     time_zone: str | None = None,
-) -> pa.Field:
+) -> tuple[pa.Field, pa.Array]:
     """
     Process a single column for type optimization.
     Returns a pyarrow.Field with the optimal dtype.
     """
     # array = table[col_name]
     if array.null_count == len(array):
-        return pa.field(col_name, pa.null())
+        return pa.field(col_name, pa.null()), array
 
     if pa.types.is_floating(array.type) or pa.types.is_integer(array.type):
         dtype = _optimize_numeric_array(array, shrink_numerics, allow_unsigned)
-        return pa.field(col_name, dtype, nullable=array.null_count > 0)
-    elif pa.types.is_string(array.type):
-        dtype = _optimize_string_array(array, col_name, shrink_numerics, time_zone)
-        return pa.field(col_name, dtype, nullable=array.null_count > 0)
-
-    return pa.field(col_name, array.type, nullable=array.null_count > 0)
+        return pa.field(col_name, dtype, nullable=array.null_count > 0), array
+    elif (
+        pa.types.is_string(array.type)
+        or pa.types.is_large_string(array.type)
+    ):
+        casted_array, dtype = _optimize_string_array(
+            array,
+            col_name,
+            shrink_numerics,
+            time_zone,
+            allow_unsigned=allow_unsigned,
+            allow_null=True,
+        )
+        return pa.field(col_name, dtype, nullable=casted_array.null_count > 0), casted_array
+    else:
+        return pa.field(col_name, array.type, nullable=array.null_count > 0), array
 
 
 def _process_column_for_opt_dtype(args):
@@ -485,7 +482,7 @@ def _process_column_for_opt_dtype(args):
     ) = args
     try:
         if col_name in cols_to_process:
-            field = _process_column(
+            field, array = _process_column(
                 array, col_name, shrink_numerics, allow_unsigned, time_zone
             )
             if pa.types.is_null(field.type):
@@ -497,9 +494,7 @@ def _process_column_for_opt_dtype(args):
                     # array = table[col_name]
                     field = pa.field(col_name, orig_type, nullable=True)
                     return (col_name, field, array)
-            else:
-                array = array.cast(field.type)
-                return (col_name, field, array)
+            return (col_name, field, array)
         else:
             field = pa.field(col_name, array.type, nullable=True)
             # array = table[col_name]
