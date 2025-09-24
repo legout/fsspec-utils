@@ -10,6 +10,7 @@ INTEGER_REGEX = r"^[-+]?\d+$"
 FLOAT_REGEX = r"^[-+]?(?:\d*[.,])?\d+(?:[eE][-+]?\d+)?$"
 BOOLEAN_REGEX = r"^(true|false|1|0|yes|ja|no|nein|t|f|y|j|n|ok|nok)$"
 BOOLEAN_TRUE_REGEX = r"^(true|1|yes|ja|t|y|j|ok)$"
+# Make 8-digit pattern more restrictive to exclude obvious non-dates
 DATETIME_REGEX = (
     r"^("
     r"\d{4}-\d{2}-\d{2}"  # ISO: 2023-12-31
@@ -18,7 +19,8 @@ DATETIME_REGEX = (
     r"|"
     r"\d{2}\.\d{2}\.\d{4}"  # German: 31.12.2023
     r"|"
-    r"\d{8}"  # Compact: 20231231
+    # Only match 8-digit numbers that look like reasonable dates
+    r"(?:19|20)\d{6}"  # Years 1900-2099: 20231231
     r")"
     r"([ T]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?)?"  # Optional time: 23:59[:59[.123456]]
     r"([+-]\d{2}:?\d{2}|Z|UTC)?"  # Optional timezone: +01:00, -0500, Z, UTC
@@ -214,13 +216,15 @@ def _optimize_string_column(
     col_name = series.name
     cleaned_expr = _clean_string_expr(col_name)
 
-    non_null = series.drop_nulls()
-    if non_null.is_empty():
+    # Check if all values are actually null (including null-like strings)
+    cleaned_series = series.to_frame().select(_clean_string_expr(col_name)).to_series()
+    if cleaned_series.is_null().all():
         if allow_null:
-            return pl.col(col_name).cast(pl.Null())
-        return pl.col(col_name).cast(series.dtype)
+            # Return a column of nulls with Null type
+            return pl.lit(None, dtype=pl.Null()).alias(col_name)
+        return pl.col(col_name)
 
-    stripped = non_null.str.strip_chars()
+    stripped = series.drop_nulls().str.strip_chars()
 
     # Liste der Platzhalter-Werte muss mit _clean_string_expr konsistent bleiben
     null_like_values = [
@@ -249,6 +253,40 @@ def _optimize_string_column(
         return pl.col(col_name)
 
     lower_detector = detector_values.str.to_lowercase()
+
+    # Integer-Erkennung (vor Datetime, um 8-stellige Zahlen zu erfassen)
+    if detector_values.str.contains(INTEGER_REGEX).all():
+        # Cast to Int64 first to ensure valid conversion
+        int_expr = cleaned_expr.cast(pl.Int64)
+
+        # Check if we should use unsigned integers
+        if allow_unsigned:
+            # Check if all original string values are non-negative
+            # (excluding null-like values that were cleaned)
+            if detector_values.min() is not None and detector_values.min() >= "0":
+                # Convert to UInt64 first, then shrink if needed
+                uint_expr = int_expr.cast(pl.UInt64)
+                if shrink_numerics:
+                    return uint_expr.shrink_dtype().alias(col_name)
+                return uint_expr.alias(col_name)
+
+        # Fall back to signed integers
+        if shrink_numerics:
+            return int_expr.shrink_dtype().alias(col_name)
+        return int_expr.alias(col_name)
+
+    # Float-Erkennung
+    if detector_values.str.contains(FLOAT_REGEX).all():
+        float_expr = cleaned_expr.str.replace_all(",", ".").cast(pl.Float64).alias(
+            col_name
+        )
+        if shrink_numerics:
+            temp_floats = detector_values.str.replace_all(",", ".").cast(
+                pl.Float64, strict=False
+            )
+            if _can_downcast_to_float32(temp_floats):
+                return float_expr.shrink_dtype().alias(col_name)
+        return float_expr
 
     # Boolean-Erkennung
     if lower_detector.str.contains(BOOLEAN_REGEX).all():
@@ -311,26 +349,6 @@ def _optimize_string_column(
             import logging
             logging.debug(f"Datetime parsing failed for column {col_name}: {e}")
             pass
-
-    # Integer-Erkennung (nach Datetime, um 8-stellige Daten zu erfassen)
-    if detector_values.str.contains(INTEGER_REGEX).all():
-        int_expr = cleaned_expr.cast(pl.Int64).alias(col_name)
-        if shrink_numerics:
-            return int_expr.shrink_dtype().alias(col_name)
-        return int_expr
-
-    # Float-Erkennung
-    if detector_values.str.contains(FLOAT_REGEX).all():
-        float_expr = cleaned_expr.str.replace_all(",", ".").cast(pl.Float64).alias(
-            col_name
-        )
-        if shrink_numerics:
-            temp_floats = detector_values.str.replace_all(",", ".").cast(
-                pl.Float64, strict=False
-            )
-            if _can_downcast_to_float32(temp_floats):
-                return float_expr.shrink_dtype().alias(col_name)
-        return float_expr
 
     # Kein Cast → Original behalten
     return pl.col(col_name)
