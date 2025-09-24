@@ -22,7 +22,7 @@ DATETIME_REGEX = (
     r"\d{8}"  # Compact: 20231231
     r")"
     r"([ T]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?)?"  # Optional time: 23:59[:59[.123456]]
-    r"([+-]\d{2}:?\d{2}|Z)?"  # Optional timezone: +01:00, -0500, Z
+    r"([+-]\d{2}:?\d{2}|Z|UTC)?"  # Optional timezone: +01:00, -0500, Z, UTC
     r"$"
 )
 
@@ -275,6 +275,76 @@ NULL_LIKE_STRINGS = {
 }
 
 
+def _normalize_datetime_string(s: str) -> str:
+    """
+    Normalize a datetime string by removing timezone information.
+
+    Args:
+        s: Datetime string potentially containing timezone info
+
+    Returns:
+        str: Normalized datetime string without timezone
+    """
+    s = str(s).strip()
+    s = re.sub(r'Z$', '', s)
+    s = re.sub(r'UTC$', '', s)
+    s = re.sub(r'([+-]\d{2}:\d{2})$', '', s)
+    s = re.sub(r'([+-]\d{4})$', '', s)
+    return s
+
+
+def _detect_timezone_from_sample(series: pl.Series) -> str | None:
+    """
+    Detect the most common timezone from a sample of datetime strings.
+
+    Args:
+        series: Polars Series containing datetime strings
+
+    Returns:
+        str or None: Most common timezone found, or None if no timezone detected
+    """
+    import random
+
+    # Sample up to 1000 values for performance
+    sample_size = min(1000, len(series))
+    if sample_size == 0:
+        return None
+
+    # Get random sample
+    sample_indices = random.sample(range(len(series)), sample_size)
+    sample_values = [series[i] for i in sample_indices if series[i] is not None]
+
+    if not sample_values:
+        return None
+
+    # Extract timezones
+    timezones = []
+    for val in sample_values:
+        val = str(val).strip()
+        match = re.search(r"(Z|UTC|[+-]\d{2}:\d{2}|[+-]\d{4})$", val)
+        if match:
+            tz = match.group(1)
+            if tz == "Z":
+                timezones.append("UTC")
+            elif tz == "UTC":
+                timezones.append("UTC")
+            elif tz.startswith("+") or tz.startswith("-"):
+                # Normalize timezone format
+                if ":" not in tz:
+                    tz = tz[:3] + ":" + tz[3:]
+                timezones.append(tz)
+
+    if not timezones:
+        return None
+
+    # Count frequencies
+    from collections import Counter
+    tz_counts = Counter(timezones)
+
+    # Return most common timezone
+    return tz_counts.most_common(1)[0][0]
+
+
 def _clean_string_array(array: pa.Array) -> pa.Array:
     """Trimmt Strings und ersetzt definierte Platzhalter durch Null (Python-basiert, robust)."""
     if len(array) == 0:
@@ -369,6 +439,7 @@ def _optimize_string_array(
     time_zone: str | None = None,
     allow_unsigned: bool = True,
     allow_null: bool = True,
+    force_timezone: str | None = None,
 ) -> tuple[pa.Array, pa.DataType]:
     """Analysiere String-Array und bestimme Ziel-Datentyp.
 
@@ -421,11 +492,42 @@ def _optimize_string_array(
 
         # Datetime
         if _all_match_regex(non_null, DATETIME_REGEX):
-            # Nutzung Polars für tolerant parsing
+            # Nutzung Polars für tolerant parsing mit erweiterter Format-Unterstützung
             pl_series = pl.Series(col_name, cleaned_array)
-            converted = pl_series.str.to_datetime(
-                strict=False, time_unit="us", time_zone=time_zone
-            )
+
+            # Prüfe ob gemischte Zeitzonen vorhanden sind
+            has_tz = pl_series.str.contains(r"(Z|UTC|[+-]\d{2}:\d{2}|[+-]\d{4})$").any()
+
+            if has_tz:
+                # Bei gemischten Zeitzonen, verwende eager parsing auf Series-Ebene
+                normalized_series = pl_series.map_elements(
+                    _normalize_datetime_string, return_dtype=pl.String
+                )
+
+                if force_timezone is not None:
+                    dt_series = normalized_series.str.to_datetime(time_zone=force_timezone, time_unit="us")
+                else:
+                    detected_tz = _detect_timezone_from_sample(pl_series)
+                    if detected_tz is not None:
+                        dt_series = normalized_series.str.to_datetime(time_zone=detected_tz, time_unit="us")
+                    else:
+                        dt_series = normalized_series.str.to_datetime(time_unit="us")
+
+                converted = dt_series
+            else:
+                # Bei konsistenten Zeitzonen, verwende Polars' eingebaute Format-Erkennung
+                if force_timezone is not None:
+                    converted = pl_series.str.to_datetime(time_zone=force_timezone, time_unit="us")
+                else:
+                    # Prüfe ob Zeitzonen vorhanden sind
+                    has_any_tz = pl_series.str.contains(r"(Z|UTC|[+-]\d{2}:\d{2}|[+-]\d{4})$").any()
+                    if has_any_tz:
+                        # Automatische Zeitzonenerkennung
+                        converted = pl_series.str.to_datetime(time_unit="us")
+                    else:
+                        # Ohne Zeitzonen
+                        converted = pl_series.str.to_datetime(time_unit="us")
+
             return converted.to_arrow(), converted.to_arrow().type
     except Exception:  # pragma: no cover
         pass
@@ -440,6 +542,7 @@ def _process_column(
     shrink_numerics: bool,
     allow_unsigned: bool,
     time_zone: str | None = None,
+    force_timezone: str | None = None,
 ) -> tuple[pa.Field, pa.Array]:
     """
     Process a single column for type optimization.
@@ -463,6 +566,7 @@ def _process_column(
             time_zone,
             allow_unsigned=allow_unsigned,
             allow_null=True,
+            force_timezone=force_timezone,
         )
         return pa.field(col_name, dtype, nullable=casted_array.null_count > 0), casted_array
     else:
@@ -479,11 +583,12 @@ def _process_column_for_opt_dtype(args):
         time_zone,
         strict,
         allow_null,
+        force_timezone,
     ) = args
     try:
         if col_name in cols_to_process:
             field, array = _process_column(
-                array, col_name, shrink_numerics, allow_unsigned, time_zone
+                array, col_name, shrink_numerics, allow_unsigned, time_zone, force_timezone
             )
             if pa.types.is_null(field.type):
                 if allow_null:
@@ -516,13 +621,24 @@ def opt_dtype(
     use_large_dtypes: bool = False,
     strict: bool = False,
     allow_null: bool = True,
+    *,
+    force_timezone: str | None = None,
 ) -> pa.Table:
     """
     Optimize data types of a PyArrow Table for performance and memory efficiency.
     Returns a new table casted to the optimal schema.
 
     Args:
-        allow_null (bool): If False, columns that only hold null-like values will not be converted to pyarrow.null().
+        table: The PyArrow table to optimize.
+        include: Column(s) to include in optimization (default: all columns).
+        exclude: Column(s) to exclude from optimization.
+        time_zone: Optional time zone hint during datetime parsing.
+        shrink_numerics: Whether to downcast numeric types when possible.
+        allow_unsigned: Whether to allow unsigned integer types.
+        use_large_dtypes: If True, keep large types like large_string.
+        strict: If True, will raise an error if any column cannot be optimized.
+        allow_null: If False, columns that only hold null-like values will not be converted to pyarrow.null().
+        force_timezone: If set, ensure all parsed datetime columns end up with this timezone.
     """
     if isinstance(include, str):
         include = [include]
@@ -546,6 +662,7 @@ def opt_dtype(
             time_zone,
             strict,
             allow_null,
+            force_timezone,
         )
         for col_name in table.column_names
     ]

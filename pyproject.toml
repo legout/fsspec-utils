@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fsspec-utils"
-version = "0.2.3"
+version = "0.2.4"
 description = "Enhanced utilities and extensions for fsspec filesystems with multi-format I/O support"
 readme = "README.md"
 license = "MIT"
@@ -127,39 +127,38 @@ packages = ["src/fsspec_utils"]
 # ]
 # ignore_missing_imports = true
 
-# [tool.pytest.ini_options]
-# testpaths = ["tests"]
-# python_files = ["test_*.py"]
-# python_classes = ["Test*"]
-# python_functions = ["test_*"]
-# addopts = [
-#     "--strict-markers",
-#     "--strict-config",
-#     "--cov=fsspec_utils",
-#     "--cov-report=term-missing",
-#     "--cov-fail-under=80",
-# ]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=fsspec_utils",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=80",
+]
 
-# [tool.coverage.run]
-# source = ["src/fsspec_utils"]
-# omit = [
-#     "*/tests/*",
-#     "*/test_*",
-# ]
+[tool.coverage.run]
+source = ["src/fsspec_utils"]
+omit = ["*/tests/*", "*/test_*"]
 
-# [tool.coverage.report]
-# exclude_lines = [
-#     "pragma: no cover",
-#     "def __repr__",
-#     "if self.debug:",
-#     "if settings.DEBUG",
-#     "raise AssertionError",
-#     "raise NotImplementedError",
-#     "if 0:",
-#     "if __name__ == .__main__.:",
-#     "class .*\\bProtocol\\):",
-#     "@(abc\\.)?abstractmethod",
-# ]
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
 
 [dependency-groups]
 dev = [

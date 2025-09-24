@@ -1,6 +1,7 @@
 import numpy as np
 import polars as pl
 import polars.selectors as cs
+import re
 
 from .datetime import get_timedelta_str, get_timestamp_column
 
@@ -20,7 +21,7 @@ DATETIME_REGEX = (
     r"\d{8}"  # Compact: 20231231
     r")"
     r"([ T]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?)?"  # Optional time: 23:59[:59[.123456]]
-    r"([+-]\d{2}:?\d{2}|Z)?"  # Optional timezone: +01:00, -0500, Z
+    r"([+-]\d{2}:?\d{2}|Z|UTC)?"  # Optional timezone: +01:00, -0500, Z, UTC
     r"$"
 )
 
@@ -106,12 +107,100 @@ def _optimize_numeric_column(
     return expr.shrink_dtype()
 
 
+def _detect_timezone_from_sample(series: pl.Series, sample_size: int = 100) -> str | None:
+    """Efficiently detect the most common timezone from a sample of datetime strings.
+
+    Args:
+        series: Series containing datetime strings
+        sample_size: Maximum number of values to sample (for performance)
+
+    Returns:
+        The most common timezone string, or None if most values are timezone-naive
+    """
+    # Sample the data for performance
+    sample_size = min(sample_size, len(series))
+    if sample_size == 0:
+        return None
+
+    # Take a sample from the series
+    if len(series) <= sample_size:
+        sample = series
+    else:
+        # Take every nth item to get a representative sample
+        step = len(series) // sample_size
+        sample = series[::step][:sample_size]
+
+    # Drop null values
+    sample = sample.drop_nulls()
+    if sample.is_empty():
+        return None
+
+    # Extract timezone information
+    timezones = []
+    utc_count = 0
+    naive_count = 0
+
+    for val in sample:
+        val_str = str(val)
+
+        # Check for timezone patterns
+        if val_str.endswith("Z"):
+            timezones.append("UTC")
+            utc_count += 1
+        elif "+00:00" in val_str:
+            timezones.append("UTC")
+            utc_count += 1
+        elif "+0000" in val_str:
+            timezones.append("UTC")
+            utc_count += 1
+        elif re.search(r"[+-]\d{2}:?\d{2}$", val_str):
+            # Extract timezone offset
+            match = re.search(r"([+-]\d{2}:?\d{2})$", val_str)
+            if match:
+                tz = match.group(1)
+                if tz == "+00:00" or tz == "+0000":
+                    timezones.append("UTC")
+                    utc_count += 1
+                else:
+                    timezones.append(tz)
+        else:
+            naive_count += 1
+
+    # Determine the most common timezone
+    if not timezones:
+        # All values are timezone-naive
+        return None
+
+    # Count timezone occurrences
+    from collections import Counter
+    tz_counts = Counter(timezones)
+
+    # If most values are timezone-naive, return None
+    if naive_count > len(sample) / 2:
+        return None
+
+    # Get the most common timezone
+    most_common_tz, most_common_count = tz_counts.most_common(1)[0]
+
+    # If there's a tie, prefer UTC
+    if most_common_count == utc_count and utc_count > 0:
+        return "UTC"
+
+    # If the most common timezone appears in more than 30% of non-naive values, use it
+    if most_common_count >= len(timezones) * 0.3:
+        return most_common_tz
+
+    # Default to UTC if we have any timezone information
+    return "UTC"
+
+
 def _optimize_string_column(
     series: pl.Series,
     shrink_numerics: bool,
     time_zone: str | None = None,
     allow_null: bool = True,
     allow_unsigned: bool = True,
+    force_timezone: str | None = None,
 ) -> pl.Expr:
     """Convert string column to appropriate type based on content analysis.
 
@@ -169,7 +258,61 @@ def _optimize_string_column(
             .alias(col_name)
         )
 
-    # Integer-Erkennung
+    # Datetime-Erkennung mit Polars' eingebauter Format-Erkennung
+    if detector_values.str.contains(DATETIME_REGEX).all():
+        try:
+            # Prüfe ob gemischte Zeitzonen vorhanden sind
+            has_tz = series.str.contains(r"(Z|UTC|[+-]\d{2}:\d{2}|[+-]\d{4})$").any()
+
+            if has_tz:
+                # Bei gemischten Zeitzonen, verwende eager parsing auf Series-Ebene
+                import re
+
+                def normalize_datetime_string(s):
+                    """Normalisiere verschiedene Zeitzone-Formate für das Parsen."""
+                    if not s:
+                        return s
+
+                    s = str(s).strip()
+                    # Entferne Zeitzonen-Informationen, da Polars diese nicht gemischt verarbeiten kann
+                    s = re.sub(r'Z$', '', s)
+                    s = re.sub(r'UTC$', '', s)
+                    s = re.sub(r'([+-]\d{2}:\d{2})$', '', s)
+                    s = re.sub(r'([+-]\d{4})$', '', s)
+                    return s
+
+                # Normalisiere die Zeitzone-Formate
+                normalized_series = series.map_elements(normalize_datetime_string, return_dtype=pl.String)
+
+                # Parse mit force_timezone falls angegeben
+                if force_timezone is not None:
+                    dt_series = normalized_series.str.to_datetime(time_zone=force_timezone, time_unit="us")
+                else:
+                    # Erkenne die häufigste Zeitzone
+                    detected_tz = _detect_timezone_from_sample(series)
+                    if detected_tz is not None:
+                        dt_series = normalized_series.str.to_datetime(time_zone=detected_tz, time_unit="us")
+                    else:
+                        dt_series = normalized_series.str.to_datetime(time_unit="us")
+
+                # Konvertiere zurück zu Expr
+                return pl.lit(dt_series).alias(col_name)
+            else:
+                # Keine gemischten Zeitzonen - normales expression-basiertes Parsen
+                dt_expr = cleaned_expr.str.to_datetime(strict=False, time_unit="us")
+
+                # Wende force_timezone an falls angegeben
+                if force_timezone is not None:
+                    dt_expr = dt_expr.dt.replace_time_zone(force_timezone)
+
+                return dt_expr.alias(col_name)
+        except Exception as e:  # pragma: no cover - defensive
+            # Log error for debugging
+            import logging
+            logging.debug(f"Datetime parsing failed for column {col_name}: {e}")
+            pass
+
+    # Integer-Erkennung (nach Datetime, um 8-stellige Daten zu erfassen)
     if detector_values.str.contains(INTEGER_REGEX).all():
         int_expr = cleaned_expr.cast(pl.Int64).alias(col_name)
         if shrink_numerics:
@@ -189,15 +332,6 @@ def _optimize_string_column(
                 return float_expr.shrink_dtype().alias(col_name)
         return float_expr
 
-    # Datetime-Erkennung
-    try:
-        if detector_values.str.contains(DATETIME_REGEX).all():
-            return cleaned_expr.str.to_datetime(
-                strict=False, time_unit="us", time_zone=time_zone
-            ).alias(col_name)
-    except pl.exceptions.PolarsError:  # pragma: no cover - defensive
-        pass
-
     # Kein Cast → Original behalten
     return pl.col(col_name)
 
@@ -209,6 +343,7 @@ def _get_column_expr(
     allow_unsigned: bool = True,
     allow_null: bool = True,
     time_zone: str | None = None,
+    force_timezone: str | None = None,
 ) -> pl.Expr:
     """Generate optimization expression for a single column."""
     series = df[col_name]
@@ -232,6 +367,7 @@ def _get_column_expr(
             time_zone,
             allow_null,
             allow_unsigned,
+            force_timezone,
         )
 
     # Keep original for other types
@@ -247,6 +383,8 @@ def opt_dtype(
     allow_unsigned: bool = True,
     allow_null: bool = True,
     strict: bool = False,
+    *,
+    force_timezone: str | None = None,
 ) -> pl.DataFrame:
     """
     Optimize data types of a Polars DataFrame for performance and memory efficiency.
@@ -256,17 +394,18 @@ def opt_dtype(
     numeric type downcasting.
 
     Args:
-        df: DataFrame to optimize
-        include: Column(s) to include in optimization (default: all columns)
-        exclude: Column(s) to exclude from optimization
-        time_zone: Optional time zone for datetime parsing
-        shrink_numerics: Whether to downcast numeric types when possible
-        allow_unsigned: Whether to allow unsigned integer types
-        allow_null: Whether to allow columns with all null values to be cast to Null type
-        strict: If True, will raise an error if any column cannot be optimized
+        df: The Polars DataFrame to optimize.
+        include: Column(s) to include in optimization (default: all columns).
+        exclude: Column(s) to exclude from optimization.
+        time_zone: Optional time zone hint during datetime parsing.
+        shrink_numerics: Whether to downcast numeric types when possible.
+        allow_unsigned: Whether to allow unsigned integer types.
+        allow_null: Whether to allow columns with all null values to be cast to Null type.
+        strict: If True, will raise an error if any column cannot be optimized.
+        force_timezone: If set, ensure all parsed datetime columns end up with this timezone.
 
     Returns:
-        DataFrame with optimized data types
+        DataFrame with optimized data types.
     """
     # Normalize include/exclude parameters
     if isinstance(include, str):
@@ -287,7 +426,13 @@ def opt_dtype(
         try:
             expressions.append(
                 _get_column_expr(
-                    df, col_name, shrink_numerics, allow_unsigned, allow_null, time_zone
+                    df,
+                    col_name,
+                    shrink_numerics,
+                    allow_unsigned,
+                    allow_null,
+                    time_zone,
+                    force_timezone,
                 )
             )
         except Exception as e:
@@ -649,7 +794,7 @@ def partition_by(
             timestamp_column=timestamp_column, strftime=strftime
         )
         strftime_columns = [
-            f"_strftime_{strftime_.replaace('%', '')}_" for strftime_ in strftime
+            f"_strftime_{strftime_.replace('%', '')}_" for strftime_ in strftime
         ]
         columns_ += strftime_columns
         drop_columns += strftime_columns
