@@ -873,7 +873,7 @@ wheels = [
 
 [[package]]
 name = "fsspec-utils"
-version = "0.2.4"
+version = "0.2.4.2"
 source = { editable = "." }
 dependencies = [
     { name = "fsspec" },

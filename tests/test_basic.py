@@ -1,5 +1,7 @@
 """Basic tests for fsspec-utils package."""
 
+from pathlib import Path
+
 import pytest
 
 def test_imports():
@@ -43,6 +45,47 @@ def test_storage_options():
 def test_logging_setup():
     """Test logging setup."""
     from fsspec_utils.utils import setup_logging
-    
+
     # Should not raise any errors
     setup_logging(level="INFO", disable=False)
+
+
+def test_filesystem_preserves_directory_without_trailing_slash(tmp_path):
+    """Ensure filesystem() keeps the last directory component by default."""
+    from fsspec_utils import DirFileSystem, filesystem
+
+    root = tmp_path / "path" / "to" / "root"
+    root.mkdir(parents=True)
+
+    fs = filesystem(root.as_posix())
+
+    assert isinstance(fs, DirFileSystem)
+    assert Path(fs.path).resolve() == root.resolve()
+
+
+def test_filesystem_infers_directory_from_file_path(tmp_path):
+    """Ensure filesystem() detects file inputs and returns the parent directory."""
+    from fsspec_utils import DirFileSystem, filesystem
+
+    root = tmp_path / "data"
+    root.mkdir()
+    file_path = root / "file.csv"
+    file_path.write_text("content", encoding="utf-8")
+
+    fs = filesystem(file_path.as_posix())
+
+    assert isinstance(fs, DirFileSystem)
+    assert Path(fs.path).resolve() == root.resolve()
+
+
+def test_filesystem_directory_with_dotted_parent(tmp_path):
+    """Directories with dots in parent names should be preserved."""
+    from fsspec_utils import DirFileSystem, filesystem
+
+    root = tmp_path / "dataset.v1" / "partition"
+    root.mkdir(parents=True)
+
+    fs = filesystem(root.as_posix())
+
+    assert isinstance(fs, DirFileSystem)
+    assert Path(fs.path).resolve() == root.resolve()

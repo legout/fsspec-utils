@@ -449,7 +449,7 @@ MonitoredSimpleCacheFileSystem.ls = mscf_ls_p
 
 
 def filesystem(
-    protocol_or_path: str,
+    protocol_or_path: str | None = "",
     storage_options: Optional[Union[BaseStorageOptions, dict]] = None,
     cached: bool = False,
     cache_storage: Optional[str] = None,
@@ -509,8 +509,23 @@ def filesystem(
         protocol = protocol_or_path if protocol_or_path is not None else "file"
         base_path = ""
 
-    if "." in base_path:
-        base_path = posixpath.dirname(base_path)
+    base_path = base_path or ""
+    normalized_base_path = base_path.rstrip("/\\")
+
+    if not normalized_base_path and base_path.startswith(("/", "\\")):
+        normalized_base_path = base_path[:1]
+
+    if normalized_base_path:
+        candidate = normalized_base_path
+        base_name = posixpath.basename(candidate)
+        _, extension = posixpath.splitext(base_name)
+
+        if extension:
+            base_path = posixpath.dirname(candidate)
+        else:
+            base_path = candidate
+    else:
+        base_path = normalized_base_path
 
     #print(f"Base path: {base_path}, Protocol: {protocol}")
 
@@ -574,7 +589,7 @@ def filesystem(
 
 
 def get_filesystem(
-    protocol_or_path: str,
+    protocol_or_path: str | None = None,
     storage_options: Optional[Union[BaseStorageOptions, dict]] = None,
     cached: bool = False,
     cache_storage: Optional[str] = None,
