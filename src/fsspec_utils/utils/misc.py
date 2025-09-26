@@ -9,6 +9,7 @@ from joblib import Parallel, delayed
 from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn, track
 
 from fsspec import AbstractFileSystem
+from fsspec.implementations.dirfs import DirFileSystem
 # from ..utils.logging import get_logger
 
 # logger = get_logger(__name__)
@@ -489,6 +490,27 @@ def check_optional_dependency(package_name: str, feature_name: str) -> None:
         )
 
 
+def check_fs_identical(fs1: AbstractFileSystem, fs2: AbstractFileSystem) -> bool:
+    """Check if two fsspec filesystems are identical.
+
+    Args:
+        fs1: First filesystem (fsspec AbstractFileSystem)
+        fs2: Second filesystem (fsspec AbstractFileSystem)
+
+    Returns:
+        bool: True if filesystems are identical, False otherwise
+    """
+
+    def _get_root_fs(fs: AbstractFileSystem) -> AbstractFileSystem:
+        while hasattr(fs, "fs"):
+            fs = fs.fs
+        return fs
+
+    fs1 = _get_root_fs(fs1)
+    fs2 = _get_root_fs(fs2)
+    return fs1 == fs2
+
+
 def sync_files(
     add_files: list[str],
     delete_files: list[str],
@@ -496,6 +518,7 @@ def sync_files(
     dst_fs: AbstractFileSystem,
     src_path: str = "",
     dst_path: str = "",
+    server_side: bool = False,
     chunk_size: int = 8 * 1024 * 1024,
     parallel: bool = False,
     n_jobs: int = -1,
@@ -508,6 +531,9 @@ def sync_files(
         delete_files: List of file paths to delete from destination
         src_fs: Source filesystem (fsspec AbstractFileSystem)
         dst_fs: Destination filesystem (fsspec AbstractFileSystem)
+        src_path: Base path in source filesystem. Default is root ('').
+        dst_path: Base path in destination filesystem. Default is root ('').
+        server_side: Whether to use server-side copy if supported. Default is False.
         chunk_size: Size of chunks to read/write files (in bytes). Default is 8MB.
         parallel: Whether to perform copy/delete operations in parallel. Default is False.
         n_jobs: Number of parallel jobs if parallel=True. Default is -1 (all cores).
@@ -518,6 +544,20 @@ def sync_files(
     """
     CHUNK = chunk_size
     RETRIES = 3
+
+    server_side = check_fs_identical(src_fs, dst_fs) and server_side
+
+    src_mapper = src_fs.get_mapper(src_path)
+    dst_mapper = dst_fs.get_mapper(dst_path)
+
+    def server_side_copy_file(key, src_mapper, dst_mapper, RETRIES):
+        last_exc = None
+        for attempt in range(1, RETRIES + 1):
+            try:
+                dst_mapper[key] = src_mapper[key]
+                break
+            except Exception as e:
+                last_exc = e
 
     def copy_file(key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES):
         last_exc = None
@@ -548,18 +588,44 @@ def sync_files(
     if len(add_files):
         # Copy new files
         if parallel:
-            run_parallel(
-                copy_file,
-                add_files,
-                src_fs=src_fs,
-                dst_fs=dst_fs,
-                src_path=src_path,
-                dst_path=dst_path,
-                CHUNK=CHUNK,
-                RETRIES=RETRIES,
-                n_jobs=n_jobs,
-                verbose=verbose,
-            )
+            if server_side:
+                try:
+                    run_parallel(
+                        server_side_copy_file,
+                        add_files,
+                        src_mapper=src_mapper,
+                        dst_mapper=dst_mapper,
+                        RETRIES=RETRIES,
+                        n_jobs=n_jobs,
+                        verbose=verbose,
+                    )
+                except Exception:
+                    # Fallback to client-side copy if server-side fails
+                    run_parallel(
+                        copy_file,
+                        add_files,
+                        src_fs=src_fs,
+                        dst_fs=dst_fs,
+                        src_path=src_path,
+                        dst_path=dst_path,
+                        CHUNK=CHUNK,
+                        RETRIES=RETRIES,
+                        n_jobs=n_jobs,
+                        verbose=verbose,
+                    )
+            else:
+                run_parallel(
+                    copy_file,
+                    add_files,
+                    src_fs=src_fs,
+                    dst_fs=dst_fs,
+                    src_path=src_path,
+                    dst_path=dst_path,
+                    CHUNK=CHUNK,
+                    RETRIES=RETRIES,
+                    n_jobs=n_jobs,
+                    verbose=verbose,
+                )
         else:
             if verbose:
                 for key in track(
@@ -567,10 +633,30 @@ def sync_files(
                     description="Copying new files...",
                     total=len(add_files),
                 ):
-                    copy_file(key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES)
+                    if server_side:
+                        try:
+                            server_side_copy_file(key, src_mapper, dst_mapper, RETRIES)
+                        except Exception:
+                            copy_file(
+                                key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES
+                            )
+                    else:
+                        copy_file(
+                            key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES
+                        )
             else:
                 for key in add_files:
-                    copy_file(key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES)
+                    if server_side:
+                        try:
+                            server_side_copy_file(key, src_mapper, dst_mapper, RETRIES)
+                        except Exception:
+                            copy_file(
+                                key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES
+                            )
+                    else:
+                        copy_file(
+                            key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES
+                        )
 
     if len(delete_files):
         # Delete old files from destination
@@ -604,6 +690,7 @@ def sync_dir(
     dst_fs: AbstractFileSystem,
     src_path: str = "",
     dst_path: str = "",
+    server_side: bool = True,
     chunk_size: int = 8 * 1024 * 1024,
     parallel: bool = False,
     n_jobs: int = -1,
@@ -642,6 +729,7 @@ def sync_dir(
         src_path=src_path,
         dst_path=dst_path,
         chunk_size=chunk_size,
+        server_side=server_side,
         parallel=parallel,
         n_jobs=n_jobs,
         verbose=verbose,
