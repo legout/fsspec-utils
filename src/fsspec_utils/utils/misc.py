@@ -6,116 +6,230 @@ import posixpath
 from typing import Any, Callable, Optional, Union
 
 from joblib import Parallel, delayed
-from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
+from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn, track
 
+from fsspec import AbstractFileSystem
 # from ..utils.logging import get_logger
 
 # logger = get_logger(__name__)
 
 
-def run_parallel(
-    func: Callable,
-    *args,
-    n_jobs: int = -1,
-    backend: str = "threading",
-    verbose: bool = True,
-    **kwargs,
-) -> list[Any]:
-    """Run a function for a list of parameters in parallel.
+# def run_parallel(
+#     func: Callable,
+#     *args,
+#     n_jobs: int = -1,
+#     backend: str = "threading",
+#     verbose: bool = True,
+#     **kwargs,
+# ) -> list[Any]:
+#     """Run a function for a list of parameters in parallel.
 
-    Provides parallel execution with progress tracking and flexible
-    argument handling.
+#     Provides parallel execution with progress tracking and flexible
+#     argument handling.
 
-    Args:
-        func: Function to run in parallel.
-        *args: Positional arguments. Can be single values or iterables.
-        n_jobs: Number of joblib workers. Defaults to -1 (all cores).
-        backend: Joblib backend. Options: 'loky', 'threading',
-                'multiprocessing', 'sequential'. Defaults to 'threading'.
-        verbose: Show progress bar. Defaults to True.
-        **kwargs: Keyword arguments. Can be single values or iterables.
+#     Args:
+#         func: Function to run in parallel.
+#         *args: Positional arguments. Can be single values or iterables.
+#         n_jobs: Number of joblib workers. Defaults to -1 (all cores).
+#         backend: Joblib backend. Options: 'loky', 'threading',
+#                 'multiprocessing', 'sequential'. Defaults to 'threading'.
+#         verbose: Show progress bar. Defaults to True.
+#         **kwargs: Keyword arguments. Can be single values or iterables.
 
-    Returns:
-        List of function outputs in the same order as inputs.
+#     Returns:
+#         List of function outputs in the same order as inputs.
 
-    Raises:
-        ValueError: If no iterable arguments provided or length mismatch.
+#     Raises:
+#         ValueError: If no iterable arguments provided or length mismatch.
 
-    Examples:
-        >>> # Single iterable argument
-        >>> run_parallel(str.upper, ["hello", "world"])
-        ['HELLO', 'WORLD']
+#     Examples:
+#         >>> # Single iterable argument
+#         >>> run_parallel(str.upper, ["hello", "world"])
+#         ['HELLO', 'WORLD']
 
-        >>> # Multiple iterables in args and kwargs
-        >>> def add(x, y, offset=0):
-        ...     return x + y + offset
-        >>> run_parallel(add, [1, 2, 3], y=[4, 5, 6], offset=10)
-        [15, 17, 19]
+#         >>> # Multiple iterables in args and kwargs
+#         >>> def add(x, y, offset=0):
+#         ...     return x + y + offset
+#         >>> run_parallel(add, [1, 2, 3], y=[4, 5, 6], offset=10)
+#         [15, 17, 19]
 
-        >>> # Fixed and iterable arguments
-        >>> run_parallel(pow, [2, 3, 4], exp=2)
-        [4, 9, 16]
-    """
-    parallel_kwargs = {"n_jobs": n_jobs, "backend": backend, "verbose": 0}
+#         >>> # Fixed and iterable arguments
+#         >>> run_parallel(pow, [2, 3, 4], exp=2)
+#         [4, 9, 16]
+#     """
+#     parallel_kwargs = {"n_jobs": n_jobs, "backend": backend, "verbose": 0}
 
-    iterables = []
-    fixed_args = []
-    iterable_kwargs = {}
-    fixed_kwargs = {}
+#     iterables = []
+#     fixed_args = []
+#     iterable_kwargs = {}
+#     fixed_kwargs = {}
 
-    first_iterable_len = None
+#     first_iterable_len = None
 
-    # Process positional arguments
-    for arg in args:
-        if isinstance(arg, (list, tuple)) and not isinstance(arg[0], (list, tuple)):
-            iterables.append(arg)
-            if first_iterable_len is None:
-                first_iterable_len = len(arg)
-            elif len(arg) != first_iterable_len:
-                raise ValueError(
-                    f"Iterable length mismatch: argument has length {len(arg)}, expected {first_iterable_len}"
-                )
-        else:
-            fixed_args.append(arg)
+#     # Process positional arguments
+#     for arg in args:
+#         if isinstance(arg, (list, tuple)) and not isinstance(arg[0], (list, tuple)):
+#             iterables.append(arg)
+#             if first_iterable_len is None:
+#                 first_iterable_len = len(arg)
+#             elif len(arg) != first_iterable_len:
+#                 raise ValueError(
+#                     f"Iterable length mismatch: argument has length {len(arg)}, expected {first_iterable_len}"
+#                 )
+#         else:
+#             fixed_args.append(arg)
 
-    # Process keyword arguments
-    for key, value in kwargs.items():
-        if isinstance(value, (list, tuple)) and not isinstance(value[0], (list, tuple)):
-            if first_iterable_len is None:
-                first_iterable_len = len(value)
-            elif len(value) != first_iterable_len:
-                raise ValueError(
-                    f"Iterable length mismatch: {key} has length {len(value)}, expected {first_iterable_len}"
-                )
-            iterable_kwargs[key] = value
-        else:
-            fixed_kwargs[key] = value
+#     # Process keyword arguments
+#     for key, value in kwargs.items():
+#         if isinstance(value, (list, tuple)) and not isinstance(value[0], (list, tuple)):
+#             if first_iterable_len is None:
+#                 first_iterable_len = len(value)
+#             elif len(value) != first_iterable_len:
+#                 raise ValueError(
+#                     f"Iterable length mismatch: {key} has length {len(value)}, expected {first_iterable_len}"
+#                 )
+#             iterable_kwargs[key] = value
+#         else:
+#             fixed_kwargs[key] = value
 
-    if first_iterable_len is None:
-        raise ValueError("At least one iterable argument is required")
+#     if first_iterable_len is None:
+#         raise ValueError("At least one iterable argument is required")
 
-    # Combine all iterables and create parameter combinations
-    all_iterables = iterables + list(iterable_kwargs.values())
-    param_combinations = list(zip(*all_iterables))
+#     # Combine all iterables and create parameter combinations
+#     all_iterables = iterables + list(iterable_kwargs.values())
+#     param_combinations = list(zip(*all_iterables))
 
-    # Execute without progress bar
-    if not verbose:
-        return Parallel(**parallel_kwargs)(
-            delayed(func)(
-                *(list(param_tuple[: len(iterables)]) + fixed_args),
-                **{
-                    k: v
-                    for k, v in zip(
-                        iterable_kwargs.keys(), param_tuple[len(iterables) :]
+#     # Execute without progress bar
+#     if not verbose:
+#         return Parallel(**parallel_kwargs)(
+#             delayed(func)(
+#                 *(list(param_tuple[: len(iterables)]) + fixed_args),
+#                 **{
+#                     k: v
+#                     for k, v in zip(
+#                         iterable_kwargs.keys(), param_tuple[len(iterables) :]
+#                     )
+#                 },
+#                 **fixed_kwargs,
+#             )
+#             for param_tuple in param_combinations
+#         )
+
+#     # Execute with progress bar
+#     else:
+#         results = [None] * len(param_combinations)
+#         with Progress(
+#             TextColumn("[progress.description]{task.description}"),
+#             BarColumn(),
+#             "[progress.percentage]{task.percentage:>3.0f}%",
+#             TimeElapsedColumn(),
+#             transient=True,
+#         ) as progress:
+#             task = progress.add_task(
+#                 "Running in parallel...", total=len(param_combinations)
+#             )
+
+#             def wrapper(idx, param_tuple):
+#                 res = func(
+#                     *(list(param_tuple[: len(iterables)]) + fixed_args),
+#                     **{
+#                         k: v
+#                         for k, v in zip(
+#                             iterable_kwargs.keys(), param_tuple[len(iterables) :]
+#                         )
+#                     },
+#                     **fixed_kwargs,
+#                 )
+#                 progress.update(task, advance=1)
+#                 return idx, res
+
+#             for idx, result in Parallel(**parallel_kwargs)(
+#                 delayed(wrapper)(i, param_tuple)
+#                 for i, param_tuple in enumerate(param_combinations)
+#             ):
+#                 results[idx] = result
+#         return results
+if importlib.util.find_spec("joblib"):
+    from joblib import Parallel, delayed
+    from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
+
+    def _prepare_parallel_args(
+        args: tuple, kwargs: dict
+    ) -> tuple[list, list, dict, dict, int]:
+        """Prepare and validate arguments for parallel execution.
+
+        Args:
+            args: Positional arguments
+            kwargs: Keyword arguments
+
+        Returns:
+            tuple: (iterables, fixed_args, iterable_kwargs, fixed_kwargs, first_iterable_len)
+
+        Raises:
+            ValueError: If no iterable arguments or length mismatch
+        """
+        iterables = []
+        fixed_args = []
+        iterable_kwargs = {}
+        fixed_kwargs = {}
+        first_iterable_len = None
+
+        # Process positional arguments
+        for arg in args:
+            if isinstance(arg, (list, tuple)) and not isinstance(arg[0], (list, tuple)):
+                iterables.append(arg)
+                if first_iterable_len is None:
+                    first_iterable_len = len(arg)
+                elif len(arg) != first_iterable_len:
+                    raise ValueError(
+                        f"Iterable length mismatch: argument has length {len(arg)}, expected {first_iterable_len}"
                     )
-                },
-                **fixed_kwargs,
-            )
-            for param_tuple in param_combinations
-        )
+            else:
+                fixed_args.append(arg)
 
-    # Execute with progress bar
-    else:
+        # Process keyword arguments
+        for key, value in kwargs.items():
+            if isinstance(value, (list, tuple)) and not isinstance(
+                value[0], (list, tuple)
+            ):
+                if first_iterable_len is None:
+                    first_iterable_len = len(value)
+                elif len(value) != first_iterable_len:
+                    raise ValueError(
+                        f"Iterable length mismatch: {key} has length {len(value)}, expected {first_iterable_len}"
+                    )
+                iterable_kwargs[key] = value
+            else:
+                fixed_kwargs[key] = value
+
+        if first_iterable_len is None:
+            raise ValueError("At least one iterable argument is required")
+
+        return iterables, fixed_args, iterable_kwargs, fixed_kwargs, first_iterable_len
+
+    def _execute_parallel_with_progress(
+        func: Callable,
+        iterables: list,
+        fixed_args: list,
+        iterable_kwargs: dict,
+        fixed_kwargs: dict,
+        param_combinations: list,
+        parallel_kwargs: dict,
+    ) -> list:
+        """Execute parallel tasks with progress tracking.
+
+        Args:
+            func: Function to execute
+            iterables: List of iterable arguments
+            fixed_args: List of fixed arguments
+            iterable_kwargs: Dictionary of iterable keyword arguments
+            fixed_kwargs: Dictionary of fixed keyword arguments
+            param_combinations: List of parameter combinations
+            parallel_kwargs: Parallel execution configuration
+
+        Returns:
+            list: Results from parallel execution
+        """
         results = [None] * len(param_combinations)
         with Progress(
             TextColumn("[progress.description]{task.description}"),
@@ -148,6 +262,116 @@ def run_parallel(
             ):
                 results[idx] = result
         return results
+
+    def _execute_parallel_without_progress(
+        func: Callable,
+        iterables: list,
+        fixed_args: list,
+        iterable_kwargs: dict,
+        fixed_kwargs: dict,
+        param_combinations: list,
+        parallel_kwargs: dict,
+    ) -> list:
+        """Execute parallel tasks without progress tracking.
+
+        Args:
+            func: Function to execute
+            iterables: List of iterable arguments
+            fixed_args: List of fixed arguments
+            iterable_kwargs: Dictionary of iterable keyword arguments
+            fixed_kwargs: Dictionary of fixed keyword arguments
+            param_combinations: List of parameter combinations
+            parallel_kwargs: Parallel execution configuration
+
+        Returns:
+            list: Results from parallel execution
+        """
+        return Parallel(**parallel_kwargs)(
+            delayed(func)(
+                *(list(param_tuple[: len(iterables)]) + fixed_args),
+                **{
+                    k: v
+                    for k, v in zip(
+                        iterable_kwargs.keys(), param_tuple[len(iterables) :]
+                    )
+                },
+                **fixed_kwargs,
+            )
+            for param_tuple in param_combinations
+        )
+
+    def run_parallel(
+        func: Callable,
+        *args,
+        n_jobs: int = -1,
+        backend: str = "threading",
+        verbose: bool = True,
+        **kwargs,
+    ) -> list[Any]:
+        """Runs a function for a list of parameters in parallel.
+
+        Args:
+            func (Callable): function to run in parallel
+            *args: Positional arguments. Can be single values or iterables
+            n_jobs (int, optional): Number of joblib workers. Defaults to -1
+            backend (str, optional): joblib backend. Valid options are
+                `loky`,`threading`, `mutliprocessing` or `sequential`. Defaults to "threading"
+            verbose (bool, optional): Show progress bar. Defaults to True
+            **kwargs: Keyword arguments. Can be single values or iterables
+
+        Returns:
+            list[any]: Function output
+
+        Examples:
+            >>> # Single iterable argument
+            >>> run_parallel(func, [1,2,3], fixed_arg=42)
+
+            >>> # Multiple iterables in args and kwargs
+            >>> run_parallel(func, [1,2,3], val=[7,8,9], fixed=42)
+
+            >>> # Only kwargs iterables
+            >>> run_parallel(func, x=[1,2,3], y=[4,5,6], fixed=42)
+        """
+        if backend == "threading" and n_jobs == -1:
+            n_jobs = min(256, (os.cpu_count() or 1) + 4)
+
+        parallel_kwargs = {"n_jobs": n_jobs, "backend": backend, "verbose": 0}
+
+        # Prepare and validate arguments
+        iterables, fixed_args, iterable_kwargs, fixed_kwargs, first_iterable_len = (
+            _prepare_parallel_args(args, kwargs)
+        )
+
+        # Create parameter combinations
+        all_iterables = iterables + list(iterable_kwargs.values())
+        param_combinations = list(zip(*all_iterables))
+
+        # Execute with or without progress tracking
+        if not verbose:
+            return _execute_parallel_without_progress(
+                func,
+                iterables,
+                fixed_args,
+                iterable_kwargs,
+                fixed_kwargs,
+                param_combinations,
+                parallel_kwargs,
+            )
+        else:
+            return _execute_parallel_with_progress(
+                func,
+                iterables,
+                fixed_args,
+                iterable_kwargs,
+                fixed_kwargs,
+                param_combinations,
+                parallel_kwargs,
+            )
+
+else:
+
+    def run_parallel(*args, **kwargs):
+        raise ImportError("joblib not installed")
 
 
 def get_partitions_from_path(
@@ -263,3 +487,82 @@ def check_optional_dependency(package_name: str, feature_name: str) -> None:
             f"{package_name} is required for {feature_name}. "
             f"Install with: pip install fsspec-utils[full]"
         )
+
+
+def sync(
+    src_fs: AbstractFileSystem,
+    dst_fs: AbstractFileSystem,
+    src_path: str = "",
+    dst_path: str = "",
+    chunk_size: int = 8 * 1024 * 1024,
+    parallel: bool = False,
+    n_jobs: int = -1,
+) -> dict[str, list[str]]:
+    CHUNK = chunk_size
+    RETRIES = 3
+
+    src_mapper = src_fs.get_mapper(src_path)
+    dst_mapper = dst_fs.get_mapper(dst_path)
+
+    new_files = sorted(src_mapper.keys() - dst_mapper.keys())
+    old_files = sorted(dst_mapper.keys() - src_mapper.keys())
+
+    def copy_file(key, src_fs, dst_fs, CHUNK, RETRIES):
+        last_exc = None
+        for attempt in range(1, RETRIES + 1):
+            try:
+                with (
+                    src_fs.open(key, "rb") as r,
+                    dst_fs.open(key, "wb") as w,
+                ):
+                    while True:
+                        chunk = r.read(CHUNK)
+                        if not chunk:
+                            break
+                        w.write(chunk)
+                break
+            except Exception as e:
+                last_exc = e
+
+    def delete_file(key, dst_fs, RETRIES):
+        last_exc = None
+        for attempt in range(1, RETRIES + 1):
+            try:
+                dst_fs.rm(key)
+                break
+            except Exception as e:
+                last_exc = e
+
+    # Copy new files
+    if parallel:
+        run_parallel(
+            copy_file,
+            new_files,
+            src_fs=src_fs,
+            dst_fs=dst_fs,
+            CHUNK=CHUNK,
+            RETRIES=RETRIES,
+            n_jobs=n_jobs,
+        )
+    else:
+        for key in track(
+            new_files, description="Copying new files...", total=len(new_files)
+        ):
+            copy_file(key, src_fs, dst_fs, CHUNK, RETRIES)
+
+    # Delete old files from destination
+    if parallel:
+        run_parallel(
+            delete_file,
+            old_files,
+            dst_fs=dst_fs,
+            RETRIES=RETRIES,
+            n_jobs=n_jobs,
+        )
+    else:
+        for key in track(
+            old_files, description="Deleting stale files...", total=len(old_files)
+        ):
+            delete_file(key, dst_fs, RETRIES)
+
+    return {"added_files": new_files, "deleted_files": old_files}
