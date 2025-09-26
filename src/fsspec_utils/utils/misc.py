@@ -541,37 +541,41 @@ def sync_files(
             except Exception as e:
                 last_exc = e
 
-    # Copy new files
-    if parallel:
-        run_parallel(
-            copy_file,
-            add_files,
-            src_fs=src_fs,
-            dst_fs=dst_fs,
-            CHUNK=CHUNK,
-            RETRIES=RETRIES,
-            n_jobs=n_jobs,
-        )
-    else:
-        for key in track(
-            add_files, description="Copying new files...", total=len(add_files)
-        ):
-            copy_file(key, src_fs, dst_fs, CHUNK, RETRIES)
+    if len(add_files):
+        # Copy new files
+        if parallel:
+            run_parallel(
+                copy_file,
+                add_files,
+                src_fs=src_fs,
+                dst_fs=dst_fs,
+                CHUNK=CHUNK,
+                RETRIES=RETRIES,
+                n_jobs=n_jobs,
+            )
+        else:
+            for key in track(
+                add_files, description="Copying new files...", total=len(add_files)
+            ):
+                copy_file(key, src_fs, dst_fs, CHUNK, RETRIES)
 
-    # Delete old files from destination
-    if parallel:
-        run_parallel(
-            delete_file,
-            delete_files,
-            dst_fs=dst_fs,
-            RETRIES=RETRIES,
-            n_jobs=n_jobs,
-        )
-    else:
-        for key in track(
-            delete_files, description="Deleting stale files...", total=len(delete_files)
-        ):
-            delete_file(key, dst_fs, RETRIES)
+    if len(delete_files):
+        # Delete old files from destination
+        if parallel:
+            run_parallel(
+                delete_file,
+                delete_files,
+                dst_fs=dst_fs,
+                RETRIES=RETRIES,
+                n_jobs=n_jobs,
+            )
+        else:
+            for key in track(
+                delete_files,
+                description="Deleting stale files...",
+                total=len(delete_files),
+            ):
+                delete_file(key, dst_fs, RETRIES)
     return {"added_files": add_files, "deleted_files": delete_files}
 
 
