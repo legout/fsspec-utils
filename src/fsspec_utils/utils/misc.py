@@ -489,23 +489,31 @@ def check_optional_dependency(package_name: str, feature_name: str) -> None:
         )
 
 
-def sync(
+def sync_files(
+    add_files: list[str],
+    delete_files: list[str],
     src_fs: AbstractFileSystem,
     dst_fs: AbstractFileSystem,
-    src_path: str = "",
-    dst_path: str = "",
     chunk_size: int = 8 * 1024 * 1024,
     parallel: bool = False,
     n_jobs: int = -1,
 ) -> dict[str, list[str]]:
+    """Sync files between two filesystems by copying new files and deleting old ones.
+
+    Args:
+        add_files: List of file paths to add (copy from source to destination)
+        delete_files: List of file paths to delete from destination
+        src_fs: Source filesystem (fsspec AbstractFileSystem)
+        dst_fs: Destination filesystem (fsspec AbstractFileSystem)
+        chunk_size: Size of chunks to read/write files (in bytes). Default is 8MB.
+        parallel: Whether to perform copy/delete operations in parallel. Default is False.
+        n_jobs: Number of parallel jobs if parallel=True. Default is -1 (all cores).
+
+    Returns:
+        dict: Summary of added and deleted files
+    """
     CHUNK = chunk_size
     RETRIES = 3
-
-    src_mapper = src_fs.get_mapper(src_path)
-    dst_mapper = dst_fs.get_mapper(dst_path)
-
-    new_files = sorted(src_mapper.keys() - dst_mapper.keys())
-    old_files = sorted(dst_mapper.keys() - src_mapper.keys())
 
     def copy_file(key, src_fs, dst_fs, CHUNK, RETRIES):
         last_exc = None
@@ -537,7 +545,7 @@ def sync(
     if parallel:
         run_parallel(
             copy_file,
-            new_files,
+            add_files,
             src_fs=src_fs,
             dst_fs=dst_fs,
             CHUNK=CHUNK,
@@ -546,7 +554,7 @@ def sync(
         )
     else:
         for key in track(
-            new_files, description="Copying new files...", total=len(new_files)
+            add_files, description="Copying new files...", total=len(add_files)
         ):
             copy_file(key, src_fs, dst_fs, CHUNK, RETRIES)
 
@@ -554,15 +562,58 @@ def sync(
     if parallel:
         run_parallel(
             delete_file,
-            old_files,
+            delete_files,
             dst_fs=dst_fs,
             RETRIES=RETRIES,
             n_jobs=n_jobs,
         )
     else:
         for key in track(
-            old_files, description="Deleting stale files...", total=len(old_files)
+            delete_files, description="Deleting stale files...", total=len(delete_files)
         ):
             delete_file(key, dst_fs, RETRIES)
+    return {"added_files": add_files, "deleted_files": delete_files}
 
-    return {"added_files": new_files, "deleted_files": old_files}
+
+def sync_dir(
+    src_fs: AbstractFileSystem,
+    dst_fs: AbstractFileSystem,
+    src_path: str = "",
+    dst_path: str = "",
+    chunk_size: int = 8 * 1024 * 1024,
+    parallel: bool = False,
+    n_jobs: int = -1,
+) -> dict[str, list[str]]:
+    """Sync two directories between different filesystems.
+
+    Compares files in the source and destination directories, copies new or updated files from source to destination,
+    and deletes stale files from destination.
+
+    Args:
+        src_fs: Source filesystem (fsspec AbstractFileSystem)
+        dst_fs: Destination filesystem (fsspec AbstractFileSystem)
+        src_path: Path in source filesystem to sync. Default is root ('').
+        dst_path: Path in destination filesystem to sync. Default is root ('').
+        chunk_size: Size of chunks to read/write files (in bytes). Default is 8MB.
+        parallel: Whether to perform copy/delete operations in parallel. Default is False.
+        n_jobs: Number of parallel jobs if parallel=True. Default is -1 (all cores).
+
+    Returns:
+        dict: Summary of added and deleted files
+    """
+
+    src_mapper = src_fs.get_mapper(src_path)
+    dst_mapper = dst_fs.get_mapper(dst_path)
+
+    add_files = sorted(src_mapper.keys() - dst_mapper.keys())
+    delete_files = sorted(dst_mapper.keys() - src_mapper.keys())
+
+    return sync_files(
+        add_files,
+        delete_files,
+        src_fs,
+        dst_fs,
+        chunk_size=chunk_size,
+        parallel=parallel,
+        n_jobs=n_jobs,
+    )
