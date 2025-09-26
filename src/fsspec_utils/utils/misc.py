@@ -494,9 +494,12 @@ def sync_files(
     delete_files: list[str],
     src_fs: AbstractFileSystem,
     dst_fs: AbstractFileSystem,
+    src_path: str = "",
+    dst_path: str = "",
     chunk_size: int = 8 * 1024 * 1024,
     parallel: bool = False,
     n_jobs: int = -1,
+    verbose: bool = True,
 ) -> dict[str, list[str]]:
     """Sync files between two filesystems by copying new files and deleting old ones.
 
@@ -508,6 +511,7 @@ def sync_files(
         chunk_size: Size of chunks to read/write files (in bytes). Default is 8MB.
         parallel: Whether to perform copy/delete operations in parallel. Default is False.
         n_jobs: Number of parallel jobs if parallel=True. Default is -1 (all cores).
+        verbose: Whether to show progress bars. Default is True.
 
     Returns:
         dict: Summary of added and deleted files
@@ -515,13 +519,13 @@ def sync_files(
     CHUNK = chunk_size
     RETRIES = 3
 
-    def copy_file(key, src_fs, dst_fs, CHUNK, RETRIES):
+    def copy_file(key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES):
         last_exc = None
         for attempt in range(1, RETRIES + 1):
             try:
                 with (
-                    src_fs.open(key, "rb") as r,
-                    dst_fs.open(key, "wb") as w,
+                    src_fs.open(posixpath.join(src_path, key), "rb") as r,
+                    dst_fs.open(posixpath.join(dst_path, key), "wb") as w,
                 ):
                     while True:
                         chunk = r.read(CHUNK)
@@ -532,11 +536,11 @@ def sync_files(
             except Exception as e:
                 last_exc = e
 
-    def delete_file(key, dst_fs, RETRIES):
+    def delete_file(key, dst_fs, dst_path, RETRIES):
         last_exc = None
         for attempt in range(1, RETRIES + 1):
             try:
-                dst_fs.rm(key)
+                dst_fs.rm(posixpath.join(dst_path, key))
                 break
             except Exception as e:
                 last_exc = e
@@ -549,15 +553,24 @@ def sync_files(
                 add_files,
                 src_fs=src_fs,
                 dst_fs=dst_fs,
+                src_path=src_path,
+                dst_path=dst_path,
                 CHUNK=CHUNK,
                 RETRIES=RETRIES,
                 n_jobs=n_jobs,
+                verbose=verbose,
             )
         else:
-            for key in track(
-                add_files, description="Copying new files...", total=len(add_files)
-            ):
-                copy_file(key, src_fs, dst_fs, CHUNK, RETRIES)
+            if verbose:
+                for key in track(
+                    add_files,
+                    description="Copying new files...",
+                    total=len(add_files),
+                ):
+                    copy_file(key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES)
+            else:
+                for key in add_files:
+                    copy_file(key, src_fs, dst_fs, src_path, dst_path, CHUNK, RETRIES)
 
     if len(delete_files):
         # Delete old files from destination
@@ -566,16 +579,23 @@ def sync_files(
                 delete_file,
                 delete_files,
                 dst_fs=dst_fs,
+                dst_path=dst_path,
                 RETRIES=RETRIES,
                 n_jobs=n_jobs,
+                verbose=verbose,
             )
         else:
-            for key in track(
-                delete_files,
-                description="Deleting stale files...",
-                total=len(delete_files),
-            ):
-                delete_file(key, dst_fs, RETRIES)
+            if verbose:
+                for key in track(
+                    delete_files,
+                    description="Deleting stale files...",
+                    total=len(delete_files),
+                ):
+                    delete_file(key, dst_fs, dst_path, RETRIES)
+            else:
+                for key in delete_files:
+                    delete_file(key, dst_fs, dst_path, RETRIES)
+
     return {"added_files": add_files, "deleted_files": delete_files}
 
 
@@ -587,6 +607,7 @@ def sync_dir(
     chunk_size: int = 8 * 1024 * 1024,
     parallel: bool = False,
     n_jobs: int = -1,
+    verbose: bool = True,
 ) -> dict[str, list[str]]:
     """Sync two directories between different filesystems.
 
@@ -601,6 +622,7 @@ def sync_dir(
         chunk_size: Size of chunks to read/write files (in bytes). Default is 8MB.
         parallel: Whether to perform copy/delete operations in parallel. Default is False.
         n_jobs: Number of parallel jobs if parallel=True. Default is -1 (all cores).
+        verbose: Whether to show progress bars. Default is True.
 
     Returns:
         dict: Summary of added and deleted files
@@ -613,11 +635,14 @@ def sync_dir(
     delete_files = sorted(dst_mapper.keys() - src_mapper.keys())
 
     return sync_files(
-        add_files,
-        delete_files,
-        src_fs,
-        dst_fs,
+        add_files=add_files,
+        delete_files=delete_files,
+        src_fs=src_fs,
+        dst_fs=dst_fs,
+        src_path=src_path,
+        dst_path=dst_path,
         chunk_size=chunk_size,
         parallel=parallel,
         n_jobs=n_jobs,
+        verbose=verbose,
     )
