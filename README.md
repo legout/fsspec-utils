@@ -2,6 +2,8 @@
 
 Enhanced utilities and extensions for fsspec filesystems with multi-format I/O support.
 
+
+
 ## Overview
 
 `fsspec-utils` is a comprehensive toolkit that extends [fsspec](https://filesystem-spec.readthedocs.io/) with:
@@ -10,6 +12,8 @@ Enhanced utilities and extensions for fsspec filesystems with multi-format I/O s
 - **Enhanced caching** - Improved caching filesystem with monitoring and path preservation  
 - **Extended I/O operations** - Read/write operations for JSON, CSV, Parquet with Polars/PyArrow integration
 - **Utility functions** - Type conversion, parallel processing, and data transformation helpers
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/legout/fsspec-utils)
 
 ## Installation
 
