@@ -19,6 +19,7 @@ from fsspec.implementations.memory import MemoryFile
 from ..storage_options.base import BaseStorageOptions
 from ..storage_options.core import from_dict as storage_options_from_dict
 from ..utils.logging import get_logger
+
 # from fsspec.utils import infer_storage_options
 from .ext import AbstractFileSystem
 
@@ -527,9 +528,14 @@ def filesystem(
     else:
         base_path = normalized_base_path
 
-    #print(f"Base path: {base_path}, Protocol: {protocol}")
+    # print(f"Base path: {base_path}, Protocol: {protocol}")
 
     if base_fs is not None:
+        protocol = (
+            base_fs.protocol
+            if isinstance(base_fs.protocol, str)
+            else base_fs.protocol[0]
+        )
         if dirfs:
             # base_path = protocol_or_path.split("://")[-1]
             if base_fs.protocol == "dir":
