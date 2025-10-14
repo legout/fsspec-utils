@@ -11,11 +11,12 @@ from typing import Optional, Union
 import fsspec
 import requests
 from fsspec import filesystem as fsspec_filesystem
-from fsspec.core import strip_protocol, split_protocol
+from fsspec.core import split_protocol
 from fsspec.implementations.cache_mapper import AbstractCacheMapper
 from fsspec.implementations.cached import SimpleCacheFileSystem
 from fsspec.implementations.dirfs import DirFileSystem
 from fsspec.implementations.memory import MemoryFile
+from fsspec.registry import known_implementations
 
 from ..storage_options.base import BaseStorageOptions
 from ..storage_options.core import from_dict as storage_options_from_dict
@@ -450,6 +451,138 @@ DirFileSystem.ls = dir_ls_p
 MonitoredSimpleCacheFileSystem.ls = mscf_ls_p
 
 
+def _ensure_string(path: str | Path | None) -> str:
+    if isinstance(path, Path):
+        return path.as_posix()
+    return str(path) if path is not None else ""
+
+
+def _normalize_path(path: str, sep: str = "/") -> str:
+    if not path:
+        return ""
+    if sep == "/":
+        path = path.replace("\\", "/")
+    normalized = posixpath.normpath(path)
+    if normalized == ".":
+        return ""
+    return normalized
+
+
+def _join_paths(base: str, rel: str, sep: str = "/") -> str:
+    base_norm = _normalize_path(base, sep)
+    rel = rel or ""
+    if not rel:
+        return base_norm
+    if rel.startswith(sep):
+        return _normalize_path(rel, sep)
+    if not base_norm:
+        return _normalize_path(rel, sep)
+    return _normalize_path(f"{base_norm.rstrip(sep)}{sep}{rel}", sep)
+
+
+def _is_within(base: str, target: str, sep: str = "/") -> bool:
+    base_norm = _normalize_path(base, sep)
+    target_norm = _normalize_path(target, sep)
+    if not base_norm:
+        return True
+    if base_norm == target_norm:
+        return True
+    prefix = f"{base_norm.rstrip(sep)}{sep}"
+    return target_norm.startswith(prefix)
+
+
+def _smart_join(base: str, rel: str, sep: str = "/") -> str:
+    """Join while avoiding duplicate overlapping segments.
+
+    Example:
+        base = 'ewn/mms2/stage1', rel = 'mms2/stage1/SC' -> 'ewn/mms2/stage1/SC'
+        base = 'ewn/mms2/stage1', rel = 'stage1/SC' -> 'ewn/mms2/stage1/SC'
+        base = 'ewn/mms2/stage1', rel = 'ewn/mms2/stage1/SC' -> 'ewn/mms2/stage1/SC'
+    """
+    base_norm = _normalize_path(base, sep)
+    rel_norm = _normalize_path(rel, sep)
+
+    if not rel_norm:
+        return base_norm
+    if not base_norm:
+        return rel_norm
+
+    # If rel already has the base prefix, accept as absolute
+    if _is_within(base_norm, rel_norm, sep):
+        return rel_norm
+
+    base_parts = [p for p in base_norm.split(sep) if p]
+    rel_parts = [p for p in rel_norm.split(sep) if p]
+
+    # Longest suffix of base matching a prefix of rel
+    max_overlap = 0
+    lim = min(len(base_parts), len(rel_parts))
+    for k in range(lim, 0, -1):
+        if base_parts[-k:] == rel_parts[:k]:
+            max_overlap = k
+            break
+
+    merged_parts = base_parts + rel_parts[max_overlap:]
+    # Preserve absolute root marker if base was absolute
+    leading = sep if base_norm.startswith(sep) else ""
+    return f"{leading}{sep.join(merged_parts)}"
+
+
+def _protocol_set(protocol: str | tuple[str, ...] | list[str]) -> set[str]:
+    if isinstance(protocol, (list, tuple, set)):
+        values = protocol
+    else:
+        values = [protocol]
+    normalized = set()
+    for value in values:
+        if value is None:
+            continue
+        value = value.lower()
+        if value in {"file", "local"}:
+            normalized.update({"file", "local"})
+        else:
+            normalized.add(value)
+    return normalized
+
+
+def _protocol_matches(requested: str, candidates: set[str]) -> bool:
+    if requested is None:
+        return True
+    requested = requested.lower()
+    if requested in {"file", "local"}:
+        return bool({"file", "local"} & candidates)
+    return requested in candidates
+
+
+def _strip_for_fs(fs: AbstractFileSystem, url: str) -> str:
+    if not url:
+        return ""
+    try:
+        return fs._strip_protocol(url)
+    except AttributeError:
+        _, path = split_protocol(url)
+        return path or ""
+
+
+def _detect_local_file_path(path: str) -> tuple[str, bool]:
+    """Return parent directory for local files that exist."""
+    if not path:
+        return "", False
+    try:
+        candidate = Path(path)
+    except (TypeError, ValueError):
+        return path, False
+    try:
+        if candidate.exists() and candidate.is_file():
+            parent = candidate.parent
+            parent_str = parent.as_posix()
+            return parent_str if parent_str != "." else "", True
+    except OSError:
+        # Non-existent or inaccessible paths fall back to original input.
+        pass
+    return path, False
+
+
 def filesystem(
     protocol_or_path: str | None = "",
     storage_options: Optional[Union[BaseStorageOptions, dict]] = None,
@@ -497,105 +630,174 @@ def filesystem(
     if isinstance(protocol_or_path, Path):
         protocol_or_path = protocol_or_path.as_posix()
 
-    if not protocol_or_path:
-        # protocol_or_path = "file://"
-        base_path = ""
-        protocol = kwargs.pop("protocol", "file")
-    else:
-        protocol, base_path = split_protocol(protocol_or_path)
-        if protocol is None:
-            protocol = kwargs.pop("protocol", "file")
+    raw_input = _ensure_string(protocol_or_path)
+    protocol_from_kwargs = kwargs.pop("protocol", None)
 
-    # elif "://" in protocol_or_path:
-    #     base_path = strip_protocol(protocol_or_path)  # .split("://")[-1]
-    #     protocol = protocol_or_path.split("://")[0]
-    # elif "/" in protocol_or_path or "." in protocol_or_path:
-    #     base_path = protocol_or_path
-    #     protocol = "file"
-    # else:
-    #     protocol = protocol_or_path if protocol_or_path is not None else "file"
-    #     base_path = ""
+    provided_protocol: str | None = None
+    base_path_input: str = ""
 
-    base_path = base_path or ""
-    normalized_base_path = base_path.rstrip("/\\")
-
-    if not normalized_base_path and base_path.startswith(("/", "\\")):
-        normalized_base_path = base_path[:1]
-
-    if normalized_base_path:
-        candidate = normalized_base_path
-        base_name = posixpath.basename(candidate)
-        _, extension = posixpath.splitext(base_name)
-
-        if extension:
-            base_path = posixpath.dirname(candidate)
+    if raw_input:
+        provided_protocol, remainder = split_protocol(raw_input)
+        if provided_protocol:
+            base_path_input = remainder or ""
         else:
-            base_path = candidate
+            base_path_input = remainder or raw_input
+            if base_fs is None and base_path_input in known_implementations:
+                provided_protocol = base_path_input
+                base_path_input = ""
     else:
-        base_path = normalized_base_path
+        base_path_input = ""
 
-    # print(f"Base path: {base_path}, Protocol: {protocol}")
+    base_path_input = base_path_input.replace("\\", "/")
+
+    if (
+        base_fs is None
+        and base_path_input
+        and (provided_protocol or protocol_from_kwargs) in {None, "file", "local"}
+    ):
+        detected_parent, is_file = _detect_local_file_path(base_path_input)
+        if is_file:
+            base_path_input = detected_parent
+
+    base_path = _normalize_path(base_path_input)
+    cache_path_hint = base_path
 
     if base_fs is not None:
-        protocol = (
-            base_fs.protocol
-            if isinstance(base_fs.protocol, str)
-            else base_fs.protocol[0]
-        )
-        if dirfs:
-            # base_path = protocol_or_path.split("://")[-1]
-            if base_fs.protocol == "dir":
-                if base_path != base_fs.path:
-                    fs = DirFileSystem(
-                        path=posixpath.join(
-                            base_fs.path,
-                            base_path.replace(base_fs.path, "").lstrip("/"),
-                        ),
-                        fs=base_fs.fs,
-                    )
+        if not dirfs:
+            raise ValueError("dirfs must be True when providing base_fs")
+
+        base_is_dir = isinstance(base_fs, DirFileSystem)
+        underlying_fs = base_fs.fs if base_is_dir else base_fs
+        underlying_protocols = _protocol_set(underlying_fs.protocol)
+        requested_protocol = provided_protocol or protocol_from_kwargs
+
+        if requested_protocol and not _protocol_matches(
+            requested_protocol, underlying_protocols
+        ):
+            raise ValueError(
+                f"Protocol '{requested_protocol}' does not match base filesystem protocol "
+                f"{sorted(underlying_protocols)}"
+            )
+
+        sep = getattr(underlying_fs, "sep", "/") or "/"
+        base_root = base_fs.path if base_is_dir else ""
+        base_root_norm = _normalize_path(base_root, sep)
+        cache_path_hint = base_root_norm
+
+        fs: AbstractFileSystem
+        path_for_cache = base_root_norm
+
+        if requested_protocol:
+            absolute_target = _strip_for_fs(underlying_fs, raw_input)
+            absolute_target = _normalize_path(absolute_target, sep)
+
+            if base_is_dir and base_root_norm and not _is_within(
+                base_root_norm, absolute_target, sep
+            ):
+                raise ValueError(
+                    f"Requested path '{absolute_target}' is outside the base directory "
+                    f"'{base_root_norm}'"
+                )
+
+            if base_is_dir and absolute_target == base_root_norm:
+                fs = base_fs
             else:
-                fs = DirFileSystem(path=base_path, fs=base_fs)
+                fs = DirFileSystem(path=absolute_target, fs=underlying_fs)
+
+            path_for_cache = absolute_target
+        else:
+            rel_input = base_path
+            if rel_input:
+                segments = [segment for segment in rel_input.split(sep) if segment]
+                if any(segment == ".." for segment in segments):
+                    raise ValueError(
+                        "Relative paths must not escape the base filesystem root"
+                    )
+
+                candidate = _normalize_path(rel_input, sep)
+                absolute_target = _smart_join(base_root_norm, candidate, sep)
+
+                if base_is_dir and base_root_norm and not _is_within(
+                    base_root_norm, absolute_target, sep
+                ):
+                    raise ValueError(
+                        f"Resolved path '{absolute_target}' is outside the base "
+                        f"directory '{base_root_norm}'"
+                    )
+
+                if base_is_dir and absolute_target == base_root_norm:
+                    fs = base_fs
+                else:
+                    fs = DirFileSystem(path=absolute_target, fs=underlying_fs)
+
+                path_for_cache = absolute_target
+            else:
+                fs = base_fs
+                path_for_cache = base_root_norm
+
+        cache_path_hint = path_for_cache
+
         if cached:
-            if fs.is_cache_fs:
+            if getattr(fs, "is_cache_fs", False):
                 return fs
-            fs = MonitoredSimpleCacheFileSystem(fs=fs, cache_storage=cache_storage)
+            storage = cache_storage
+            if storage is None:
+                storage = (Path.cwd() / (cache_path_hint or "")).as_posix()
+            cached_fs = MonitoredSimpleCacheFileSystem(
+                fs=fs, cache_storage=storage, verbose=verbose
+            )
+            cached_fs.is_cache_fs = True
+            return cached_fs
 
-        return fs
-
-    protocol = (
-        protocol
-        or kwargs.get("protocol", None)
-        or (
-            storage_options.get("protocol", None)
-            if isinstance(storage_options, dict)
-            else getattr(storage_options, "protocol", None)
-        )
-    )
-
-    if protocol == "file" or protocol == "local":
-        fs = fsspec_filesystem(protocol)
-        fs.is_cache_fs = False
-        if dirfs:
-            fs = DirFileSystem(path=base_path or Path.cwd(), fs=fs)
+        if not hasattr(fs, "is_cache_fs"):
             fs.is_cache_fs = False
         return fs
 
-    if isinstance(storage_options, dict):
-        storage_options = storage_options_from_dict(protocol, storage_options)
+    protocol = provided_protocol or protocol_from_kwargs
+    if protocol is None:
+        if isinstance(storage_options, dict):
+            protocol = storage_options.get("protocol")
+        else:
+            protocol = getattr(storage_options, "protocol", None)
 
-    if storage_options is None:
-        storage_options = storage_options_from_dict(protocol, kwargs)
+    protocol = protocol or "file"
+    protocol = protocol.lower()
 
-    fs = storage_options.to_filesystem()
-    fs.is_cache_fs = False
-    if dirfs and len(base_path):
-        fs = DirFileSystem(path=base_path, fs=fs)
-        fs.is_cache_fs = False
+    if protocol in {"file", "local"}:
+        fs = fsspec_filesystem(protocol)
+        if dirfs:
+            dir_path: str | Path = base_path or Path.cwd()
+            fs = DirFileSystem(path=dir_path, fs=fs)
+            cache_path_hint = _ensure_string(dir_path)
+        if not hasattr(fs, "is_cache_fs"):
+            fs.is_cache_fs = False
+    else:
+        storage_opts = storage_options
+        if isinstance(storage_opts, dict):
+            storage_opts = storage_options_from_dict(protocol, storage_opts)
+        if storage_opts is None:
+            storage_opts = storage_options_from_dict(protocol, kwargs)
+        fs = storage_opts.to_filesystem()
+        if dirfs and base_path:
+            fs = DirFileSystem(path=base_path, fs=fs)
+            cache_path_hint = base_path
+        if not hasattr(fs, "is_cache_fs"):
+            fs.is_cache_fs = False
+
     if cached:
-        if cache_storage is None:
-            cache_storage = (Path.cwd() / base_path).as_posix()
-        fs = MonitoredSimpleCacheFileSystem(fs=fs, cache_storage=cache_storage)
-        fs.is_cache_fs = True
+        if getattr(fs, "is_cache_fs", False):
+            return fs
+        storage = cache_storage
+        if storage is None:
+            storage = (Path.cwd() / (cache_path_hint or "")).as_posix()
+        cached_fs = MonitoredSimpleCacheFileSystem(
+            fs=fs, cache_storage=storage, verbose=verbose
+        )
+        cached_fs.is_cache_fs = True
+        return cached_fs
+
+    if not hasattr(fs, "is_cache_fs"):
+        fs.is_cache_fs = False
 
     return fs
 
