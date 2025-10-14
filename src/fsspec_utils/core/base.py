@@ -11,6 +11,7 @@ from typing import Optional, Union
 import fsspec
 import requests
 from fsspec import filesystem as fsspec_filesystem
+from fsspec.core import strip_protocol, split_protocol
 from fsspec.implementations.cache_mapper import AbstractCacheMapper
 from fsspec.implementations.cached import SimpleCacheFileSystem
 from fsspec.implementations.dirfs import DirFileSystem
@@ -495,20 +496,25 @@ def filesystem(
     """
     if isinstance(protocol_or_path, Path):
         protocol_or_path = protocol_or_path.as_posix()
+
     if not protocol_or_path:
         # protocol_or_path = "file://"
         base_path = ""
-        protocol = "file"
-
-    elif "://" in protocol_or_path:
-        base_path = protocol_or_path.split("://")[-1]
-        protocol = protocol_or_path.split("://")[0]
-    elif "/" in protocol_or_path or "." in protocol_or_path:
-        base_path = protocol_or_path
-        protocol = "file"
+        protocol = kwargs.pop("protocol", "file")
     else:
-        protocol = protocol_or_path if protocol_or_path is not None else "file"
-        base_path = ""
+        protocol, base_path = split_protocol(protocol_or_path)
+        if protocol is None:
+            protocol = kwargs.pop("protocol", "file")
+
+    # elif "://" in protocol_or_path:
+    #     base_path = strip_protocol(protocol_or_path)  # .split("://")[-1]
+    #     protocol = protocol_or_path.split("://")[0]
+    # elif "/" in protocol_or_path or "." in protocol_or_path:
+    #     base_path = protocol_or_path
+    #     protocol = "file"
+    # else:
+    #     protocol = protocol_or_path if protocol_or_path is not None else "file"
+    #     base_path = ""
 
     base_path = base_path or ""
     normalized_base_path = base_path.rstrip("/\\")
