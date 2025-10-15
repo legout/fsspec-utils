@@ -185,6 +185,64 @@ class MonitoredSimpleCacheFileSystem(SimpleCacheFileSystem):
 
         return result
 
+    def size(self, path: str) -> int:
+        """Get size of file in bytes.
+
+        Checks cache first, falls back to remote filesystem.
+
+        Args:
+            path: Path to file
+
+        Returns:
+            int: Size of file in bytes
+
+        Example:
+            >>> fs = MonitoredSimpleCacheFileSystem(
+            ...     fs=remote_fs,
+            ...     cache_storage="/tmp/cache"
+            ... )
+            >>> size = fs.size("large_file.dat")
+            >>> print(f"File size: {size} bytes")
+        """
+        cached_file = self._check_file(self._strip_protocol(path))
+        if cached_file is None:
+            return self.fs.size(path)
+        else:
+            return posixpath.getsize(cached_file)
+
+    def sync_cache(self, reload: bool = False) -> None:
+        """Synchronize cache with remote filesystem.
+
+        Downloads all files in remote path to cache if not present.
+
+        Args:
+            reload: Whether to force reload all files, ignoring existing cache
+
+        Example:
+            >>> fs = MonitoredSimpleCacheFileSystem(
+            ...     fs=remote_fs,
+            ...     cache_storage="/tmp/cache"
+            ... )
+            >>> # Initial sync
+            >>> fs.sync_cache()
+            >>> 
+            >>> # Force reload all files
+            >>> fs.sync_cache(reload=True)
+        """
+        if reload:
+            if hasattr(self, "clear_cache"):
+                self.clear_cache()
+            else:
+                if hasattr(self, "fs"):
+                    self.fs.invalidate_cache()
+                    self.fs.clear_instance_cache()
+                else:
+                    self.invalidate_cache()
+                    self.clear_instance_cache()
+                
+        files = self.glob("**/*")
+        [self._check_file() for f in files if self.isfile(f)]
+
 
 class GitLabFileSystem(AbstractFileSystem):
     """Filesystem interface for GitLab repositories.
