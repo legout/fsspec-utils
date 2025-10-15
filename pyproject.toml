@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fsspec-utils"
-version = "0.2.6"
+version = "0.2.6.1"
 description = "Enhanced utilities and extensions for fsspec filesystems with multi-format I/O support"
 readme = "README.md"
 license = "MIT"
