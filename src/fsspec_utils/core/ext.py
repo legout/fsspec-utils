@@ -2132,7 +2132,7 @@ def clear_cache(fs: AbstractFileSystem | None):
             fs.invalidate_cache()
             fs.clear_instance_cache()
        
-
+AbstractFileSystem.clear_cache = clear_cache
 AbstractFileSystem.read_json_file = read_json_file
 AbstractFileSystem.read_json = read_json
 AbstractFileSystem.read_csv_file = read_csv_file
