@@ -1,5 +1,6 @@
 """Core filesystem functionality and utilities."""
 
+import inspect
 import base64
 import os
 import posixpath
@@ -73,43 +74,21 @@ class FileNameCacheMapper(AbstractCacheMapper):
             >>> print(mapper("data/nested/file.txt"))
             'data/nested/file.txt'
         """
+        # os.makedirs(
+        #     posixpath.dirname(posixpath.join(self.directory, path)), exist_ok=True
+        # )
         os.makedirs(
             posixpath.dirname(posixpath.join(self.directory, path)), exist_ok=True
         )
+
         return path
 
 
 class MonitoredSimpleCacheFileSystem(SimpleCacheFileSystem):
-    """Enhanced caching filesystem with monitoring and improved path handling.
-
-    This filesystem extends SimpleCacheFileSystem to provide:
-    - Verbose logging of cache operations
-    - Improved path mapping for cache files
-    - Enhanced synchronization capabilities
-    - Better handling of parallel operations
-
-    Attributes:
-        _verbose (bool): Whether to print verbose cache operations
-        _mapper (FileNameCacheMapper): Maps remote paths to cache paths
-        storage (list[str]): List of cache storage locations
-        fs (AbstractFileSystem): Underlying filesystem being cached
-
-    Example:
-        >>> from fsspec import filesystem
-        >>> s3_fs = filesystem("s3")
-        >>> cached_fs = MonitoredSimpleCacheFileSystem(
-        ...     fs=s3_fs,
-        ...     cache_storage="/tmp/cache",
-        ...     verbose=True
-        ... )
-        >>> # Use cached_fs like any other filesystem
-        >>> files = cached_fs.ls("my-bucket/")
-    """
-
     def __init__(
         self,
         fs: Optional[fsspec.AbstractFileSystem] = None,
-        cache_storage: Union[str, list[str]] = "~/.cache/fsspec",
+        cache_storage: str = "~/.cache/fsspec",
         verbose: bool = False,
         **kwargs,
     ):
@@ -132,58 +111,45 @@ class MonitoredSimpleCacheFileSystem(SimpleCacheFileSystem):
         """
         self._verbose = verbose
 
-        # Handle cache storage configuration
-        if isinstance(cache_storage, str):
-            cache_storage = [cache_storage]
-
-        self.storage = cache_storage
-
-        # Set up cache mapper for preserving directory structure
-        if len(cache_storage) == 1:
-            self._mapper = FileNameCacheMapper(cache_storage[0])
-            kwargs["cache_mapper"] = self._mapper
-
-        # Initialize with expanded cache storage paths
-        expanded_storage = [os.path.expanduser(path) for path in cache_storage]
-        super().__init__(fs=fs, cache_storage=expanded_storage, **kwargs)
+        # # Initialize with expanded cache storage paths
+        # expanded_storage = os.path.expanduser(cache_storage)
+        # super().__init__(
+        #     fs=fs,
+        #     cache_storage=expanded_storage,
+        #     cache_mapper=FileNameCacheMapper(expanded_storage),
+        #     **kwargs,
+        # )
+        # kwargs["cache_storage"] = os.path.join(kwargs.get("cache_storage"), "123")
+        super().__init__(fs=fs, cache_storage=cache_storage, **kwargs)
+        self._mapper = FileNameCacheMapper(cache_storage)
 
         if self._verbose:
-            logger.info(
-                f"Initialized cache filesystem with storage: {expanded_storage}"
-            )
+            logger.info(f"Initialized cache filesystem with storage: {cache_storage}")
 
-    def _check_cache(self, path: str) -> Optional[str]:
-        """Check if file exists in cache and return cache path if found.
-
-        Args:
-            path: Remote file path to check
-
-        Returns:
-            Cache file path if found, None otherwise
+    def open(self, path, mode="rb", **kwargs):
         """
-        result = super()._check_cache(path)
-        if self._verbose and result:
-            logger.info(f"Cache hit for {path} -> {result}")
-        return result
-
-    def _check_file(self, path: str) -> str:
-        """Ensure file is in cache, downloading if necessary.
-
-        Args:
-            path: Remote file path
-
-        Returns:
-            Local cache path for the file
+        Open a file. If the file's path does not match the cache regex, bypass the
+        caching and read directly from the underlying filesystem.
         """
+        # if not ICEBERG_FILE_REGEX.search(path):
+        #     # bypass caching.
+        #     return self.fs.open(path, mode=mode, **kwargs)
+
+        return super().open(path, mode=mode, **kwargs)
+
+    def _check_file(self, path):
+        # self._check_cache()
         if self._verbose:
             logger.info(f"Checking file: {path}")
+        # cache_path = self._mapper(path)
 
-        result = super()._check_file(path)
-
-        if self._verbose:
-            logger.info(f"File available at: {result}")
-
-        return result
+        for storage in self.storage:
+            fn = os.path.join(storage, path)
+            if os.path.exists(fn):
+                return fn
+            # else:
+            #    self.open(path, mode="rb").close()
+            #    logger.info(f"Downloading {self.protocol[0]}://{path}")
 
     def size(self, path: str) -> int:
         """Get size of file in bytes.
@@ -225,23 +191,103 @@ class MonitoredSimpleCacheFileSystem(SimpleCacheFileSystem):
             ... )
             >>> # Initial sync
             >>> fs.sync_cache()
-            >>> 
+            >>>
             >>> # Force reload all files
             >>> fs.sync_cache(reload=True)
         """
         if reload:
             if hasattr(self, "clear_cache"):
                 self.clear_cache()
-            else:
-                if hasattr(self, "fs"):
-                    self.fs.invalidate_cache()
-                    self.fs.clear_instance_cache()
-                else:
-                    self.invalidate_cache()
-                    self.clear_instance_cache()
-                
+
         files = self.glob("**/*")
-        [self._check_file() for f in files if self.isfile(f)]
+        [self.open(f, mode="rb").close() for f in files if self.isfile(f)]
+
+    def __getattribute__(self, item):
+        if item in {
+            # new items
+            "size",
+            "glob",
+            # previous
+            "load_cache",
+            "_open",
+            "save_cache",
+            "close_and_update",
+            "sync_cache",
+            "__init__",
+            "__getattribute__",
+            "__reduce__",
+            "_make_local_details",
+            "open",
+            "cat",
+            "cat_file",
+            "cat_ranges",
+            "get",
+            "read_block",
+            "tail",
+            "head",
+            "info",
+            "ls",
+            "exists",
+            "isfile",
+            "isdir",
+            "_check_file",
+            "_check_cache",
+            "_mkcache",
+            "clear_cache",
+            "clear_expired_cache",
+            "pop_from_cache",
+            "local_file",
+            "_paths_from_path",
+            "get_mapper",
+            "open_many",
+            "commit_many",
+            "hash_name",
+            "__hash__",
+            "__eq__",
+            "to_json",
+            "to_dict",
+            "cache_size",
+            "pipe_file",
+            "pipe",
+            "start_transaction",
+            "end_transaction",
+            "sync_cache",
+        }:
+            # all the methods defined in this class. Note `open` here, since
+            # it calls `_open`, but is actually in superclass
+            return lambda *args, **kw: getattr(type(self), item).__get__(self)(
+                *args, **kw
+            )
+        if item in ["__reduce_ex__"]:
+            raise AttributeError
+        if item in ["transaction"]:
+            # property
+            return type(self).transaction.__get__(self)
+        if item in ["_cache", "transaction_type"]:
+            # class attributes
+            return getattr(type(self), item)
+        if item == "__class__":
+            return type(self)
+        d = object.__getattribute__(self, "__dict__")
+        fs = d.get("fs", None)  # fs is not immediately defined
+        if item in d:
+            return d[item]
+        elif fs is not None:
+            if item in fs.__dict__:
+                # attribute of instance
+                return fs.__dict__[item]
+            # attributed belonging to the target filesystem
+            cls = type(fs)
+            m = getattr(cls, item)
+            if (inspect.isfunction(m) or inspect.isdatadescriptor(m)) and (
+                not hasattr(m, "__self__") or m.__self__ is None
+            ):
+                # instance method
+                return m.__get__(fs, cls)
+            return m  # class method or attribute
+        else:
+            # attributes of the superclass, while target is being set up
+            return super().__getattribute__(item)
 
 
 class GitLabFileSystem(AbstractFileSystem):
@@ -642,7 +688,7 @@ def _detect_local_file_path(path: str) -> tuple[str, bool]:
 
 
 def _default_cache_storage(cache_path_hint: str | None) -> str:
-    base_cache_dir = Path.cwd() / ".fsspec_cache"
+    base_cache_dir = Path.home() / ".fsspec_cache"
     if cache_path_hint:
         base_cache_dir = base_cache_dir / cache_path_hint
     return base_cache_dir.as_posix()
@@ -756,8 +802,10 @@ def filesystem(
             absolute_target = _strip_for_fs(underlying_fs, raw_input)
             absolute_target = _normalize_path(absolute_target, sep)
 
-            if base_is_dir and base_root_norm and not _is_within(
-                base_root_norm, absolute_target, sep
+            if (
+                base_is_dir
+                and base_root_norm
+                and not _is_within(base_root_norm, absolute_target, sep)
             ):
                 raise ValueError(
                     f"Requested path '{absolute_target}' is outside the base directory "
@@ -782,8 +830,10 @@ def filesystem(
                 candidate = _normalize_path(rel_input, sep)
                 absolute_target = _smart_join(base_root_norm, candidate, sep)
 
-                if base_is_dir and base_root_norm and not _is_within(
-                    base_root_norm, absolute_target, sep
+                if (
+                    base_is_dir
+                    and base_root_norm
+                    and not _is_within(base_root_norm, absolute_target, sep)
                 ):
                     raise ValueError(
                         f"Resolved path '{absolute_target}' is outside the base "
