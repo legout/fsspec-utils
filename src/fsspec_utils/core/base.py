@@ -641,6 +641,13 @@ def _detect_local_file_path(path: str) -> tuple[str, bool]:
     return path, False
 
 
+def _default_cache_storage(cache_path_hint: str | None) -> str:
+    base_cache_dir = Path.cwd() / ".fsspec_cache"
+    if cache_path_hint:
+        base_cache_dir = base_cache_dir / cache_path_hint
+    return base_cache_dir.as_posix()
+
+
 def filesystem(
     protocol_or_path: str | None = "",
     storage_options: Optional[Union[BaseStorageOptions, dict]] = None,
@@ -800,7 +807,7 @@ def filesystem(
                 return fs
             storage = cache_storage
             if storage is None:
-                storage = (Path.cwd() / (cache_path_hint or "")).as_posix()
+                storage = _default_cache_storage(cache_path_hint or None)
             cached_fs = MonitoredSimpleCacheFileSystem(
                 fs=fs, cache_storage=storage, verbose=verbose
             )
@@ -847,7 +854,7 @@ def filesystem(
             return fs
         storage = cache_storage
         if storage is None:
-            storage = (Path.cwd() / (cache_path_hint or "")).as_posix()
+            storage = _default_cache_storage(cache_path_hint or None)
         cached_fs = MonitoredSimpleCacheFileSystem(
             fs=fs, cache_storage=storage, verbose=verbose
         )
