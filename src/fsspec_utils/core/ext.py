@@ -2123,15 +2123,17 @@ def write_pyarrow_dataset(
 #         **kwargs,
 #     )
 
+
 def clear_cache(fs: AbstractFileSystem | None):
     if hasattr(fs, "dircache"):
-         if hasattr(fs, "fs"):
+        if hasattr(fs, "fs"):
             fs.fs.invalidate_cache()
             fs.fs.clear_instance_cache()
         else:
             fs.invalidate_cache()
             fs.clear_instance_cache()
-       
+
+
 AbstractFileSystem.clear_cache = clear_cache
 AbstractFileSystem.read_json_file = read_json_file
 AbstractFileSystem.read_json = read_json
