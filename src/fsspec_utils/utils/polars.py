@@ -749,8 +749,10 @@ def unify_schemas(dfs: list[pl.DataFrame | pl.LazyFrame]) -> pl.Schema:
     if len(unique_schemas) == 1:
         return unique_schemas[0]
     else:
-        return pl.concat([pl.LazyFrame(schema=schema_overrides=schema) for schema in unique_schemas], how="diagonal_relaxed").collect_schema()
-
+        return pl.concat(
+            [pl.LazyFrame(schema=schema) for schema in unique_schemas],
+            how="diagonal_relaxed",
+        ).collect_schema()
 
 
 def cast_relaxed(

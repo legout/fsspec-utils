@@ -32,6 +32,71 @@ F32_MIN = float(np.finfo(np.float32).min)
 F32_MAX = float(np.finfo(np.float32).max)
 
 
+def convert_large_types_to_normal(schema: pa.Schema) -> pa.Schema:
+    """
+    Convert large types in a PyArrow schema to their standard types.
+
+    Args:
+        schema (pa.Schema): The PyArrow schema to convert.
+
+    Returns:
+        pa.Schema: A new PyArrow schema with large types converted to standard types.
+    """
+    # Define mapping of large types to standard types
+    type_mapping = {
+        pa.large_string(): pa.string(),
+        pa.large_binary(): pa.binary(),
+        pa.large_utf8(): pa.utf8(),
+        pa.large_list(pa.null()): pa.list_(pa.null()),
+        pa.large_list_view(pa.null()): pa.list_view(pa.null()),
+    }
+    # Convert fields
+    new_fields = []
+    for field in schema:
+        field_type = field.type
+        # Check if type exists in mapping
+        if field_type in type_mapping:
+            new_field = pa.field(
+                name=field.name,
+                type=type_mapping[field_type],
+                nullable=field.nullable,
+                metadata=field.metadata,
+            )
+            new_fields.append(new_field)
+        # Handle large lists with nested types
+        elif isinstance(field_type, pa.LargeListType):
+            new_field = pa.field(
+                name=field.name,
+                type=pa.list_(
+                    type_mapping[field_type.value_type]
+                    if field_type.value_type in type_mapping
+                    else field_type.value_type
+                ),
+                nullable=field.nullable,
+                metadata=field.metadata,
+            )
+            new_fields.append(new_field)
+        # Handle dictionary with large_string, large_utf8, or large_binary values
+        elif isinstance(field_type, pa.DictionaryType):
+            new_field = pa.field(
+                name=field.name,
+                type=pa.dictionary(
+                    field_type.index_type,
+                    type_mapping[field_type.value_type]
+                    if field_type.value_type in type_mapping
+                    else field_type.value_type,
+                    field_type.ordered,
+                ),
+                # nullable=field.nullable,
+                metadata=field.metadata,
+            )
+            new_fields.append(new_field)
+        else:
+            new_fields.append(field)
+
+    return pa.schema(new_fields)
+
+
 def dominant_timezone_per_column(
     schemas: list[pa.Schema],
 ) -> dict[str, tuple[str | None, str | None]]:
@@ -489,26 +554,26 @@ def _remove_conflicting_fields(schemas: list[pa.Schema]) -> pa.Schema:
     """
     Remove fields that have type conflicts between schemas.
     Keeps only fields that have the same type across all schemas.
-    
+
     Args:
         schemas (list[pa.Schema]): List of schemas to process.
-        
+
     Returns:
         pa.Schema: Schema with only non-conflicting fields.
     """
     if not schemas:
         return pa.schema([])
-    
+
     # Find conflicts
     conflicts = _find_conflicting_fields(schemas)
     conflicting_field_names = set(conflicts.keys())
-    
+
     # Keep only non-conflicting fields from the first schema
     fields = []
     for field in schemas[0]:
         if field.name not in conflicting_field_names:
             fields.append(field)
-    
+
     return pa.schema(fields)
 
 
@@ -588,31 +653,35 @@ def unify_schemas(
             If None, remove timezone from all timestamp columns.
         standardize_timezones (bool): If True, standardize all timestamp columns to the most frequent timezone.
         verbose (bool): If True, print conflict resolution details for debugging.
-        remove_conflicting_columns (bool): If True, allows removal of columns with type conflicts as a fallback 
+        remove_conflicting_columns (bool): If True, allows removal of columns with type conflicts as a fallback
             strategy instead of converting them. Defaults to False.
 
     Returns:
         pa.Schema: A unified PyArrow schema.
-        
+
     Raises:
         ValueError: If no schemas are provided.
     """
     if not schemas:
         raise ValueError("At least one schema must be provided for unification")
-    
+
     # Early exit for single schema
     unique_schemas = _unique_schemas(schemas)
     if len(unique_schemas) == 1:
         result_schema = unique_schemas[0]
         if standardize_timezones:
             result_schema = standardize_schema_timezones([result_schema], timezone)[0]
-        return result_schema if use_large_dtypes else convert_large_types_to_normal(result_schema)
+        return (
+            result_schema
+            if use_large_dtypes
+            else convert_large_types_to_normal(result_schema)
+        )
 
     # Step 1: Find and resolve conflicts first
     conflicts = _find_conflicting_fields(unique_schemas)
     if conflicts and verbose:
         _log_conflict_summary(conflicts, verbose)
-    
+
     if conflicts:
         # Normalize schemas using intelligent promotion rules
         unique_schemas = _normalize_schema_types(unique_schemas, conflicts)
@@ -620,67 +689,93 @@ def unify_schemas(
     # Step 2: Attempt unification with conflict-resolved schemas
     try:
         unified_schema = pa.unify_schemas(unique_schemas, promote_options="permissive")
-        
+
         # Step 3: Apply timezone standardization to the unified result
         if standardize_timezones:
             unified_schema = standardize_schema_timezones([unified_schema], timezone)[0]
-        
-        return unified_schema if use_large_dtypes else convert_large_types_to_normal(unified_schema)
-        
+
+        return (
+            unified_schema
+            if use_large_dtypes
+            else convert_large_types_to_normal(unified_schema)
+        )
+
     except (pa.ArrowInvalid, pa.ArrowTypeError) as e:
         # Step 4: Intelligent fallback strategies
         if verbose:
             print(f"Primary unification failed: {e}")
             print("Attempting fallback strategies...")
-        
+
         # Fallback 1: Try aggressive string conversion for remaining conflicts
         try:
             fallback_schema = _aggressive_fallback_unification(unique_schemas)
             if standardize_timezones:
-                fallback_schema = standardize_schema_timezones([fallback_schema], timezone)[0]
+                fallback_schema = standardize_schema_timezones(
+                    [fallback_schema], timezone
+                )[0]
             if verbose:
                 print("✓ Aggressive fallback succeeded")
-            return fallback_schema if use_large_dtypes else convert_large_types_to_normal(fallback_schema)
-            
+            return (
+                fallback_schema
+                if use_large_dtypes
+                else convert_large_types_to_normal(fallback_schema)
+            )
+
         except Exception:
             if verbose:
                 print("✗ Aggressive fallback failed")
-        
+
         # Fallback 2: Remove conflicting fields (if enabled)
         if remove_conflicting_columns:
             try:
                 non_conflicting_schema = _remove_conflicting_fields(unique_schemas)
                 if standardize_timezones:
-                    non_conflicting_schema = standardize_schema_timezones([non_conflicting_schema], timezone)[0]
+                    non_conflicting_schema = standardize_schema_timezones(
+                        [non_conflicting_schema], timezone
+                    )[0]
                 if verbose:
                     print("✓ Remove conflicting fields fallback succeeded")
-                return non_conflicting_schema if use_large_dtypes else convert_large_types_to_normal(non_conflicting_schema)
-                
+                return (
+                    non_conflicting_schema
+                    if use_large_dtypes
+                    else convert_large_types_to_normal(non_conflicting_schema)
+                )
+
             except Exception:
                 if verbose:
                     print("✗ Remove conflicting fields fallback failed")
-        
+
         # Fallback 3: Remove problematic fields that can't be unified
         try:
             minimal_schema = _remove_problematic_fields(unique_schemas)
             if standardize_timezones:
-                minimal_schema = standardize_schema_timezones([minimal_schema], timezone)[0]
+                minimal_schema = standardize_schema_timezones(
+                    [minimal_schema], timezone
+                )[0]
             if verbose:
                 print("✓ Minimal schema (removed problematic fields) succeeded")
-            return minimal_schema if use_large_dtypes else convert_large_types_to_normal(minimal_schema)
-            
+            return (
+                minimal_schema
+                if use_large_dtypes
+                else convert_large_types_to_normal(minimal_schema)
+            )
+
         except Exception:
             if verbose:
                 print("✗ Minimal schema fallback failed")
-        
+
         # Fallback 4: Return first schema as last resort
         if verbose:
             print("✗ All fallback strategies failed, returning first schema")
-        
+
         first_schema = unique_schemas[0]
         if standardize_timezones:
             first_schema = standardize_schema_timezones([first_schema], timezone)[0]
-        return first_schema if use_large_dtypes else convert_large_types_to_normal(first_schema)
+        return (
+            first_schema
+            if use_large_dtypes
+            else convert_large_types_to_normal(first_schema)
+        )
 
 
 def remove_empty_columns(table: pa.Table) -> pa.Table:
@@ -714,71 +809,6 @@ def cast_schema(table: pa.Table, schema: pa.Schema) -> pa.Table:
     filtered_fields = [field for field in schema if field.name in table_columns]
     updated_schema = pa.schema(filtered_fields)
     return table.select(updated_schema.names).cast(updated_schema)
-
-
-def convert_large_types_to_normal(schema: pa.Schema) -> pa.Schema:
-    """
-    Convert large types in a PyArrow schema to their standard types.
-
-    Args:
-        schema (pa.Schema): The PyArrow schema to convert.
-
-    Returns:
-        pa.Schema: A new PyArrow schema with large types converted to standard types.
-    """
-    # Define mapping of large types to standard types
-    type_mapping = {
-        pa.large_string(): pa.string(),
-        pa.large_binary(): pa.binary(),
-        pa.large_utf8(): pa.utf8(),
-        pa.large_list(pa.null()): pa.list_(pa.null()),
-        pa.large_list_view(pa.null()): pa.list_view(pa.null()),
-    }
-    # Convert fields
-    new_fields = []
-    for field in schema:
-        field_type = field.type
-        # Check if type exists in mapping
-        if field_type in type_mapping:
-            new_field = pa.field(
-                name=field.name,
-                type=type_mapping[field_type],
-                nullable=field.nullable,
-                metadata=field.metadata,
-            )
-            new_fields.append(new_field)
-        # Handle large lists with nested types
-        elif isinstance(field_type, pa.LargeListType):
-            new_field = pa.field(
-                name=field.name,
-                type=pa.list_(
-                    type_mapping[field_type.value_type]
-                    if field_type.value_type in type_mapping
-                    else field_type.value_type
-                ),
-                nullable=field.nullable,
-                metadata=field.metadata,
-            )
-            new_fields.append(new_field)
-        # Handle dictionary with large_string, large_utf8, or large_binary values
-        elif isinstance(field_type, pa.DictionaryType):
-            new_field = pa.field(
-                name=field.name,
-                type=pa.dictionary(
-                    field_type.index_type,
-                    type_mapping[field_type.value_type]
-                    if field_type.value_type in type_mapping
-                    else field_type.value_type,
-                    field_type.ordered,
-                ),
-                # nullable=field.nullable,
-                metadata=field.metadata,
-            )
-            new_fields.append(new_field)
-        else:
-            new_fields.append(field)
-
-    return pa.schema(new_fields)
 
 
 NULL_LIKE_STRINGS = {
