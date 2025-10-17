@@ -109,7 +109,9 @@ def _optimize_numeric_column(
     return expr.shrink_dtype()
 
 
-def _detect_timezone_from_sample(series: pl.Series, sample_size: int = 100) -> str | None:
+def _detect_timezone_from_sample(
+    series: pl.Series, sample_size: int = 100
+) -> str | None:
     """Efficiently detect the most common timezone from a sample of datetime strings.
 
     Args:
@@ -175,6 +177,7 @@ def _detect_timezone_from_sample(series: pl.Series, sample_size: int = 100) -> s
 
     # Count timezone occurrences
     from collections import Counter
+
     tz_counts = Counter(timezones)
 
     # If most values are timezone-naive, return None
@@ -277,8 +280,8 @@ def _optimize_string_column(
 
     # Float-Erkennung
     if detector_values.str.contains(FLOAT_REGEX).all():
-        float_expr = cleaned_expr.str.replace_all(",", ".").cast(pl.Float64).alias(
-            col_name
+        float_expr = (
+            cleaned_expr.str.replace_all(",", ".").cast(pl.Float64).alias(col_name)
         )
         if shrink_numerics:
             temp_floats = detector_values.str.replace_all(",", ".").cast(
@@ -313,23 +316,29 @@ def _optimize_string_column(
 
                     s = str(s).strip()
                     # Entferne Zeitzonen-Informationen, da Polars diese nicht gemischt verarbeiten kann
-                    s = re.sub(r'Z$', '', s)
-                    s = re.sub(r'UTC$', '', s)
-                    s = re.sub(r'([+-]\d{2}:\d{2})$', '', s)
-                    s = re.sub(r'([+-]\d{4})$', '', s)
+                    s = re.sub(r"Z$", "", s)
+                    s = re.sub(r"UTC$", "", s)
+                    s = re.sub(r"([+-]\d{2}:\d{2})$", "", s)
+                    s = re.sub(r"([+-]\d{4})$", "", s)
                     return s
 
                 # Normalisiere die Zeitzone-Formate
-                normalized_series = series.map_elements(normalize_datetime_string, return_dtype=pl.String)
+                normalized_series = series.map_elements(
+                    normalize_datetime_string, return_dtype=pl.String
+                )
 
                 # Parse mit force_timezone falls angegeben
                 if force_timezone is not None:
-                    dt_series = normalized_series.str.to_datetime(time_zone=force_timezone, time_unit="us")
+                    dt_series = normalized_series.str.to_datetime(
+                        time_zone=force_timezone, time_unit="us"
+                    )
                 else:
                     # Erkenne die häufigste Zeitzone
                     detected_tz = _detect_timezone_from_sample(series)
                     if detected_tz is not None:
-                        dt_series = normalized_series.str.to_datetime(time_zone=detected_tz, time_unit="us")
+                        dt_series = normalized_series.str.to_datetime(
+                            time_zone=detected_tz, time_unit="us"
+                        )
                     else:
                         dt_series = normalized_series.str.to_datetime(time_unit="us")
 
@@ -347,6 +356,7 @@ def _optimize_string_column(
         except Exception as e:  # pragma: no cover - defensive
             # Log error for debugging
             import logging
+
             logging.debug(f"Datetime parsing failed for column {col_name}: {e}")
             pass
 
@@ -461,8 +471,6 @@ def opt_dtype(
 
     # Apply all transformations at once if any exist
     return df if not expressions else df.with_columns(expressions)
-
-
 
 
 def unnest_all(df: pl.DataFrame, seperator="_", fields: list[str] | None = None):
@@ -727,11 +735,22 @@ def drop_null_columns(df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.Lazy
     return df.select([col for col in df.columns if df[col].null_count() < df.height])
 
 
+def _unique_schemas(schemas: list[pl.Schema]) -> list[pl.Schema]:
+    unique = []
+    for schema in schemas:
+        if schema not in unique:
+            unique.append(schema)
+    return unique
+
+
 def unify_schemas(dfs: list[pl.DataFrame | pl.LazyFrame]) -> pl.Schema:
-    df = pl.concat([df.lazy() for df in dfs], how="diagonal_relaxed")
-    if isinstance(df, pl.LazyFrame):
-        return df.collect_schema()
-    return df.schema
+    schemas = [df.schema for df in dfs]
+    unique_schemas = _unique_schemas(schemas)
+    if len(unique_schemas) == 1:
+        return unique_schemas[0]
+    else:
+        return pl.concat([pl.LazyFrame(schema=schema_overrides=schema) for schema in unique_schemas], how="diagonal_relaxed").collect_schema()
+
 
 
 def cast_relaxed(

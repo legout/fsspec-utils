@@ -32,7 +32,7 @@ def sql2pyarrow_filter(string: str, schema: pa.Schema) -> pc.Expression:
         val = val.strip().strip("'\"")
 
         if pa.types.is_timestamp(type_):
-            return timestamp_from_string(val,tz=type_.tz)
+            return timestamp_from_string(val, tz=type_.tz)
         elif pa.types.is_date(type_):
             return timestamp_from_string(val).date()
         elif pa.types.is_time(type_):
@@ -105,8 +105,11 @@ def sql2pyarrow_filter(string: str, schema: pa.Schema) -> pc.Expression:
             context_type = _get_field_type_from_context(expr)
             left = _convert_expression(expr.this, context_type)
             # Convert the IN list
-            if hasattr(expr, 'expression') and hasattr(expr.expression, 'expressions'):
-                right = [_convert_expression(e, context_type) for e in expr.expression.expressions]
+            if hasattr(expr, "expression") and hasattr(expr.expression, "expressions"):
+                right = [
+                    _convert_expression(e, context_type)
+                    for e in expr.expression.expressions
+                ]
             else:
                 right = _convert_expression(expr.expression, context_type)
             return left.isin(right)
@@ -118,8 +121,13 @@ def sql2pyarrow_filter(string: str, schema: pa.Schema) -> pc.Expression:
                 # NOT IN case
                 context_type = _get_field_type_from_context(inner)
                 left = _convert_expression(inner.this, context_type)
-                if hasattr(inner, 'expression') and hasattr(inner.expression, 'expressions'):
-                    right = [_convert_expression(e, context_type) for e in inner.expression.expressions]
+                if hasattr(inner, "expression") and hasattr(
+                    inner.expression, "expressions"
+                ):
+                    right = [
+                        _convert_expression(e, context_type)
+                        for e in inner.expression.expressions
+                    ]
                 else:
                     right = _convert_expression(inner.expression, context_type)
                 return ~left.isin(right)
@@ -257,8 +265,11 @@ def sql2polars_filter(string: str, schema: pl.Schema) -> pl.Expr:
             context_type = _get_field_type_from_context(expr)
             left = _convert_expression(expr.this, context_type)
             # Convert the IN list
-            if hasattr(expr, 'expression') and hasattr(expr.expression, 'expressions'):
-                right = [_convert_expression(e, context_type) for e in expr.expression.expressions]
+            if hasattr(expr, "expression") and hasattr(expr.expression, "expressions"):
+                right = [
+                    _convert_expression(e, context_type)
+                    for e in expr.expression.expressions
+                ]
             else:
                 right = _convert_expression(expr.expression, context_type)
             return left.is_in(right)
@@ -270,8 +281,13 @@ def sql2polars_filter(string: str, schema: pl.Schema) -> pl.Expr:
                 # NOT IN case
                 context_type = _get_field_type_from_context(inner)
                 left = _convert_expression(inner.this, context_type)
-                if hasattr(inner, 'expression') and hasattr(inner.expression, 'expressions'):
-                    right = [_convert_expression(e, context_type) for e in inner.expression.expressions]
+                if hasattr(inner, "expression") and hasattr(
+                    inner.expression, "expressions"
+                ):
+                    right = [
+                        _convert_expression(e, context_type)
+                        for e in inner.expression.expressions
+                    ]
                 else:
                     right = _convert_expression(inner.expression, context_type)
                 return ~left.is_in(right)
