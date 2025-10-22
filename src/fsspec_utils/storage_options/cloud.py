@@ -295,7 +295,8 @@ class AwsStorageOptions(BaseStorageOptions):
     session_token: str | None = None
     endpoint_url: str | None = None
     region: str | None = None
-    allow_invalid_certificates: bool | None = None
+    allow_invalid_certificates: bool | None = True
+    allow_invalid_certs: bool | None = True
     allow_http: bool | None = None
 
     @classmethod
@@ -307,7 +308,8 @@ class AwsStorageOptions(BaseStorageOptions):
         session_token: str | None = None,
         endpoint_url: str | None = None,
         region: str | None = None,
-        allow_invalid_certificates: bool | None = None,
+        allow_invalid_certificates: bool | None = True,
+        allow_invalid_certs: bool | None = True,
         allow_http: bool | None = None,
         # Alias and loading params
         key: str | None = None,
@@ -344,7 +346,9 @@ class AwsStorageOptions(BaseStorageOptions):
             "session_token": session_token if session_token is not None else token,
             "endpoint_url": endpoint_url,
             "region": region,
-            "allow_invalid_certificates": allow_invalid_certificates,
+            "allow_invalid_certificates": allow_invalid_certificates
+            if allow_invalid_certificates is not None
+            else allow_invalid_certs,
             "allow_http": allow_http,
         }
 
@@ -386,6 +390,7 @@ class AwsStorageOptions(BaseStorageOptions):
         cls,
         profile: str,
         allow_invalid_certificates: bool = False,
+        allow_invalid_certs: bool | None = False,
         allow_http: bool = False,
     ) -> "AwsStorageOptions":
         """Create storage options from AWS credentials file.
@@ -395,6 +400,7 @@ class AwsStorageOptions(BaseStorageOptions):
         Args:
             profile: AWS credentials profile name
             allow_invalid_certificates: Skip SSL certificate validation
+            allow_invalid_certs: Skip SSL certificate validation (deprecated, use allow_invalid_certificates)
             allow_http: Allow unencrypted HTTP connections
 
         Returns:
@@ -432,7 +438,9 @@ class AwsStorageOptions(BaseStorageOptions):
                 if f"profile {profile}" in cp
                 else None
             ),
-            allow_invalid_certificates=allow_invalid_certificates,
+            allow_invalid_certificates=allow_invalid_certificates
+            if allow_invalid_certificates is not None
+            else allow_invalid_certs,
             allow_http=allow_http,
         )
 
@@ -554,3 +562,11 @@ class AwsStorageOptions(BaseStorageOptions):
 
     def to_filesystem(self) -> AbstractFileSystem:
         return fsspec_filesystem(self.protocol, **self.to_fsspec_kwargs())
+
+    @property
+    def fs(self) -> AbstractFileSystem:
+        return self.to_filesystem()
+
+    @property
+    def storage_options(self) -> dict:
+        return self.to_object_store_kwargs()
