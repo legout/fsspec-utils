@@ -1999,14 +1999,15 @@ def write_pyarrow_dataset(
 
     file_options = pds.ParquetFileFormat().make_write_options(compression=compression)
 
-    create_dir: bool = (False,)
+    create_dir: bool = kwargs.get("create_dir", False)
 
-    if hasattr(self, "fs"):
-        if "local" in self.fs.protocol:
-            create_dir = True
-    else:
-        if "local" in self.protocol:
-            create_dir = True
+    if not create_dir:
+        if hasattr(self, "fs"):
+            if "local" in self.fs.protocol:
+                create_dir = True
+        else:
+            if "local" in self.protocol:
+                create_dir = True
 
     if format == "parquet":
         metadata = []
