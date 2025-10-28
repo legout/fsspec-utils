@@ -702,6 +702,8 @@ def filesystem(
     verbose: bool = False,
     dirfs: bool = True,
     base_fs: AbstractFileSystem = None,
+    use_listings_cache=False,  # ← disable directory-listing cache
+    skip_instance_cache=True,
     **kwargs,
 ) -> AbstractFileSystem:
     """Get filesystem instance with enhanced configuration options.
@@ -715,6 +717,10 @@ def filesystem(
         cached: Whether to wrap filesystem in caching layer
         cache_storage: Cache directory path (if cached=True)
         verbose: Enable verbose logging for cache operations
+        dirfs: Whether to wrap filesystem in DirFileSystem
+        base_fs: Base filesystem instance to use
+        use_listings_cache: Whether to enable directory-listing cache
+        skip_instance_cache: Whether to skip fsspec instance caching
         **kwargs: Additional filesystem arguments
 
     Returns:
@@ -879,7 +885,11 @@ def filesystem(
     protocol = protocol.lower()
 
     if protocol in {"file", "local"}:
-        fs = fsspec_filesystem(protocol)
+        fs = fsspec_filesystem(
+            protocol,
+            use_listings_cache=use_listings_cache,
+            skip_instance_cache=skip_instance_cache,
+        )
         if dirfs:
             dir_path: str | Path = base_path or Path.cwd()
             fs = DirFileSystem(path=dir_path, fs=fs)
@@ -892,7 +902,10 @@ def filesystem(
             storage_opts = storage_options_from_dict(protocol, storage_opts)
         if storage_opts is None:
             storage_opts = storage_options_from_dict(protocol, kwargs)
-        fs = storage_opts.to_filesystem()
+        fs = storage_opts.to_filesystem(
+            use_listings_cache=use_listings_cache,
+            skip_instance_cache=skip_instance_cache,
+        )
         if dirfs and base_path:
             fs = DirFileSystem(path=base_path, fs=fs)
             cache_path_hint = base_path

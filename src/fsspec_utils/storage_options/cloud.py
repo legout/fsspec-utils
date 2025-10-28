@@ -560,8 +560,15 @@ class AwsStorageOptions(BaseStorageOptions):
         env = {k: v for k, v in env.items() if v is not None}
         os.environ.update(env)
 
-    def to_filesystem(self) -> AbstractFileSystem:
-        return fsspec_filesystem(self.protocol, **self.to_fsspec_kwargs())
+    def to_filesystem(
+        self, use_listings_cache: bool = True, skip_instance_cache: bool = False
+    ) -> AbstractFileSystem:
+        return fsspec_filesystem(
+            self.protocol,
+            use_listings_cache=use_listings_cache,
+            skip_instance_cache=skip_instance_cache,
+            **self.to_fsspec_kwargs(),
+        )
 
     @property
     def fs(self) -> AbstractFileSystem:
