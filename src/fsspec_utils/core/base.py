@@ -702,8 +702,8 @@ def filesystem(
     verbose: bool = False,
     dirfs: bool = True,
     base_fs: AbstractFileSystem = None,
-    use_listings_cache=False,  # ← disable directory-listing cache
-    skip_instance_cache=True,
+    use_listings_cache=True,  # ← disable directory-listing cache
+    skip_instance_cache=False,
     **kwargs,
 ) -> AbstractFileSystem:
     """Get filesystem instance with enhanced configuration options.
