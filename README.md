@@ -1,5 +1,37 @@
 # fsspec-utils
 
+**⚠️ DEPRECATED - This package is no longer maintained**
+
+This package has been superseded by [**fsspeckit**](https://github.com/legout/fsspeckit).
+
+**Action Required**: Please migrate to `fsspeckit` for:
+- Continued support and bug fixes
+- New features and improvements
+- Latest dependency updates
+
+### Migration Guide
+
+Replace your imports:
+```python
+# OLD - fsspec-utils (deprecated)
+from fsspec_utils import filesystem
+from fsspec_utils.storage_options import AwsStorageOptions
+
+# NEW - fsspeckit (recommended)
+from fsspeckit import filesystem
+from fsspeckit.storage_options import AwsStorageOptions
+```
+
+Update installation:
+```bash
+pip uninstall fsspec-utils
+pip install fsspeckit
+```
+
+All functionality from `fsspec-utils` is now available in `fsspeckit` with the same API for easy migration.
+
+---
+
 Enhanced utilities and extensions for fsspec filesystems with multi-format I/O support.
 
 
