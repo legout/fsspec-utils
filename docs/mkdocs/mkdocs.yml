@@ -1,5 +1,5 @@
-site_name: fsspec-utils
-site_description: Enhanced utilities and extensions for fsspec filesystems.
+site_name: fsspec-utils (Deprecated)
+site_description: "⚠️ DEPRECATED - Use fsspeckit instead. Enhanced utilities for fsspec filesystems."
 site_url: https://legout.github.com/fsspec-utils
 repo_name: legout/fsspec-utils
 repo_url: https://github.com/legout/fsspec-utils
@@ -8,6 +8,7 @@ pypi_url: https://pypi.org/project/fsspec-utils/
 nav:
   - Home: index.md
   - Installation: installation.md
+  - Migration Guide: ../../../MIGRATION.md
   - Quickstart: quickstart.md
   - Architecture: architecture.md
   - Advanced Usage: advanced.md
@@ -57,6 +58,11 @@ theme:
 
 # extra_css:
 #   - _stylesheets/extra.css
+
+extra:
+  announcement:
+    content: "⚠️ <strong>DEPRECATION NOTICE</strong>: fsspec-utils is deprecated. Please use <a href='https://github.com/legout/fsspeckit'>fsspeckit</a> instead. <a href='./../../MIGRATION.md'>See migration guide</a>."
+    type: warning
 
 extra_javascript:
   - https://unpkg.com/mermaid@10.4.0/dist/mermaid.min.js

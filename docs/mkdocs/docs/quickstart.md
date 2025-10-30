@@ -1,14 +1,25 @@
 # Quickstart
 
-This guide will help you get started with `fsspec-utils` by demonstrating how to create and interact with a directory-based filesystem for local paths.
+!!! warning "DOCUMENTATION FOR LEGACY CODE"
+    This guide demonstrates `fsspec-utils` for reference purposes.
+    
+    **For new projects, use [fsspeckit](https://github.com/legout/fsspeckit) instead.**
+    
+    [View migration guide →](installation.md#migration-to-fsspeckit)
 
 ## Installation
 
-First, ensure you have `fsspec-utils` installed.
-
-```bash
-pip install fsspec-utils
-```
+!!! info "Deprecated Package"
+    
+    === "fsspeckit (Recommended)"
+        ```bash
+        pip install fsspeckit
+        ```
+    
+    === "fsspec-utils (Legacy)"
+        ```bash
+        pip install fsspec-utils
+        ```
 
 ## Basic Usage: Local Directory FileSystem
 

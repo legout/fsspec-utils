@@ -49,6 +49,22 @@ Enhanced utilities and extensions for fsspec filesystems with multi-format I/O s
 
 ## Installation
 
+> **⚠️ DEPRECATED**: This package is deprecated. Use `fsspeckit` instead.
+
+### Recommended: Install fsspeckit
+
+```bash
+# Install fsspeckit instead (recommended)
+pip install fsspeckit
+
+# With specific cloud providers
+pip install fsspeckit[aws]     # AWS S3 support
+pip install fsspeckit[gcp]     # Google Cloud Storage
+pip install fsspeckit[azure]   # Azure Storage
+```
+
+### Legacy: Install fsspec-utils (if maintaining existing code)
+
 ```bash
 # Basic installation
 pip install fsspec-utils
@@ -62,12 +78,20 @@ pip install fsspec-utils[gcp]     # Google Cloud Storage
 pip install fsspec-utils[azure]   # Azure Storage
 ```
 
+See [Migration Guide](./README.md#migration-guide) above for upgrading to fsspeckit.
+
 ## Quick Start
+
+> **⚠️ DEPRECATED**: Code examples below use `fsspec-utils`. Please use `fsspeckit` instead. Replace `fsspec_utils` → `fsspeckit` in imports.
 
 ### Basic Filesystem Operations
 
 ```python
-from fsspec_utils import filesystem
+# NEW - Use fsspeckit (recommended)
+from fsspeckit import filesystem
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils import filesystem
 
 # Local filesystem
 fs = filesystem("file")
@@ -81,7 +105,11 @@ data = fs.cat("data/file.txt")
 ### Storage Configuration
 
 ```python
-from fsspec_utils.storage import AwsStorageOptions
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.storage_options import AwsStorageOptions
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.storage_options import AwsStorageOptions
 
 # Configure S3 access
 options = AwsStorageOptions(
@@ -96,7 +124,11 @@ fs = filesystem("s3", storage_options=options, cached=True)
 ### Environment-based Configuration
 
 ```python
-from fsspec_utils.storage import AwsStorageOptions
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.storage_options import AwsStorageOptions
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.storage_options import AwsStorageOptions
 
 # Load from environment variables
 options = AwsStorageOptions.from_env()
@@ -106,11 +138,21 @@ fs = filesystem("s3", storage_options=options)
 ### Multiple Cloud Providers
 
 ```python
-from fsspec_utils.storage import (
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.storage_options import (
     AwsStorageOptions, 
     GcsStorageOptions,
     GitHubStorageOptions
 )
+from fsspeckit import filesystem
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.storage_options import (
+#     AwsStorageOptions, 
+#     GcsStorageOptions,
+#     GitHubStorageOptions
+# )
+# from fsspec_utils import filesystem
 
 # AWS S3
 s3_fs = filesystem("s3", storage_options=AwsStorageOptions.from_env())
@@ -131,7 +173,11 @@ github_fs = filesystem("github", storage_options=GitHubStorageOptions(
 ### AWS S3
 
 ```python
-from fsspec_utils.storage import AwsStorageOptions
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.storage_options import AwsStorageOptions
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.storage_options import AwsStorageOptions
 
 # Basic credentials
 options = AwsStorageOptions(
@@ -155,7 +201,11 @@ options = AwsStorageOptions(
 ### Google Cloud Storage
 
 ```python
-from fsspec_utils.storage import GcsStorageOptions
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.storage_options import GcsStorageOptions
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.storage_options import GcsStorageOptions
 
 # Service account
 options = GcsStorageOptions(
@@ -170,7 +220,11 @@ options = GcsStorageOptions.from_env()
 ### Azure Storage
 
 ```python
-from fsspec_utils.storage import AzureStorageOptions
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.storage_options import AzureStorageOptions
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.storage_options import AzureStorageOptions
 
 # Account key
 options = AzureStorageOptions(
@@ -189,7 +243,11 @@ options = AzureStorageOptions(
 ### GitHub
 
 ```python
-from fsspec_utils.storage import GitHubStorageOptions
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.storage_options import GitHubStorageOptions
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.storage_options import GitHubStorageOptions
 
 # Public repository
 options = GitHubStorageOptions(
@@ -210,7 +268,11 @@ options = GitHubStorageOptions(
 ### GitLab
 
 ```python
-from fsspec_utils.storage import GitLabStorageOptions
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.storage_options import GitLabStorageOptions
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.storage_options import GitLabStorageOptions
 
 # Public project
 options = GitLabStorageOptions(
@@ -229,7 +291,11 @@ options = GitLabStorageOptions(
 ## Enhanced Caching
 
 ```python
-from fsspec_utils import filesystem
+# NEW - Use fsspeckit (recommended)
+from fsspeckit import filesystem
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils import filesystem
 
 # Enable caching with monitoring
 fs = filesystem(
@@ -249,7 +315,11 @@ data = fs.cat("deep/nested/path/file.txt")
 ### Parallel Processing
 
 ```python
-from fsspec_utils.utils import run_parallel
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.utils import run_parallel
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.utils import run_parallel
 
 # Run function in parallel
 def process_file(path, multiplier=1):
@@ -267,7 +337,11 @@ results = run_parallel(
 ### Type Conversion
 
 ```python
-from fsspec_utils.utils import dict_to_dataframe, to_pyarrow_table
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.utils import dict_to_dataframe, to_pyarrow_table
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.utils import dict_to_dataframe, to_pyarrow_table
 
 # Convert dict to DataFrame
 data = {"col1": [1, 2, 3], "col2": [4, 5, 6]}
@@ -280,7 +354,11 @@ table = to_pyarrow_table(df)
 ### Logging
 
 ```python
-from fsspec_utils.utils import setup_logging
+# NEW - Use fsspeckit (recommended)
+from fsspeckit.utils import setup_logging
+
+# DEPRECATED - fsspec-utils (for reference only)
+# from fsspec_utils.utils import setup_logging
 
 # Configure logging
 setup_logging(level="DEBUG", format_string="{time} | {level} | {message}")

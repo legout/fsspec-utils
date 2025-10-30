@@ -1,5 +1,12 @@
 # `fsspec-utils` API Reference
 
+!!! info "API Reference Status"
+    This API reference is maintained for **legacy code support only**.
+    
+    For current API documentation, see [fsspeckit API Reference](https://github.com/legout/fsspeckit#api).
+    
+    All modules shown here import from fsspeckit when available, falling back to local implementations for backward compatibility.
+
 Welcome to the `fsspec-utils` API reference documentation. This section provides detailed information on the various modules, classes, and functions available in the library.
 
 ## Core Modules

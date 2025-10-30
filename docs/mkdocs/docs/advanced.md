@@ -1,5 +1,12 @@
 # Advanced Usage
 
+!!! warning "LEGACY DOCUMENTATION"
+    This advanced guide demonstrates `fsspec-utils` features for reference purposes.
+    
+    **For new projects, use [fsspeckit](https://github.com/legout/fsspeckit) instead.**
+    
+    [Migration Guide →](installation.md#migration-to-fsspeckit)
+
 `fsspec-utils` extends the capabilities of `fsspec` to provide a more robust and feature-rich experience for handling diverse file systems and data formats. This section delves into advanced features, configurations, and performance tips to help you get the most out of the library.
 
 ## Unified Filesystem Creation with `filesystem`

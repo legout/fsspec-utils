@@ -1,12 +1,25 @@
 # Contributing to fsspec-utils
 
-We welcome contributions to `fsspec-utils`! Your help makes this project better. This guide outlines how you can contribute, from reporting issues to submitting pull requests.
+!!! warning "Development Has Moved"
+    **fsspec-utils is deprecated.** Development has moved to [**fsspeckit**](https://github.com/legout/fsspeckit).
+    
+    - ✅ **New features**: Contribute to [fsspeckit](https://github.com/legout/fsspeckit)
+    - ⚠️ **Bug fixes**: Only critical fixes accepted for fsspec-utils
+    - 🔄 **All new development**: Goes to fsspeckit
+    
+    **[Contribute to fsspeckit →](https://github.com/legout/fsspeckit)**
+
+---
+
+We welcome limited contributions to `fsspec-utils` for critical bug fixes only. For new features and enhancements, please contribute to [fsspeckit](https://github.com/legout/fsspeckit) instead.
 
 ## How to Contribute
 
 ### Reporting Issues
 
-If you encounter any bugs, unexpected behavior, or have suggestions for new features, please open an issue on our [GitHub Issues page](https://github.com/fsspec/fsspec-utils/issues).
+**For fsspeckit**: Please open an issue on [fsspeckit GitHub Issues](https://github.com/legout/fsspeckit/issues)
+
+**For fsspec-utils (legacy, critical bugs only)**: Open an issue on [fsspec-utils GitHub Issues](https://github.com/legout/fsspec-utils/issues)
 
 When reporting an issue, please include:
 - A clear and concise description of the problem.
@@ -17,7 +30,9 @@ When reporting an issue, please include:
 
 ### Submitting Pull Requests
 
-We gladly accept pull requests for bug fixes, new features, and improvements. To submit a pull request:
+**Preferred**: Submit pull requests to [fsspeckit](https://github.com/legout/fsspeckit) for all new features and improvements.
+
+**For fsspec-utils (critical bug fixes only)**: To submit a critical bug fix to fsspec-utils:
 
 1.  **Fork the Repository**: Start by forking the `fsspec-utils` repository on GitHub.
 2.  **Clone Your Fork**: Clone your forked repository to your local machine.

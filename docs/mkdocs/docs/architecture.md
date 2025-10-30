@@ -1,5 +1,12 @@
 # Architecture Overview
 
+!!! info "Historical Reference"
+    This architecture documentation is maintained for **reference purposes only**.
+    
+    For current architecture details, see [fsspeckit](https://github.com/legout/fsspeckit).
+    
+    The architecture remains largely the same in fsspeckit, with ongoing improvements and refinements.
+
 `fsspec-utils` is designed to extend and enhance the capabilities of `fsspec`, providing a robust and flexible framework for interacting with various filesystems and data formats. Its architecture is modular, built around core components that abstract away complexities and offer specialized functionalities.
 
 ## Extending `fsspec`
